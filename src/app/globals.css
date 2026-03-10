@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ——— Single color grading: violet/purple family across all pages ——— */
+:root {
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+
+  /* App dark (interview, dashboard dark areas) */
+  --background: #0c0a14;
+  --foreground: #f5f3ff;
+  --card-bg: rgba(23, 21, 35, 0.92);
+  --border-subtle: rgba(67, 56, 102, 0.6);
+  --app-muted: rgba(196, 181, 253, 0.65);
+  --app-border: rgba(139, 92, 246, 0.2);
+
+  /* Landing / marketing (same grade) */
+  --landing-bg: #0f0a1f;
+  --landing-bg-gradient: linear-gradient(180deg, #3b2280 0%, #2e1a66 18%, #1e1b4b 45%, #15122e 75%, #0c0a14 100%);
+  --landing-surface: rgba(30, 27, 75, 0.6);
+  --landing-surface-solid: rgba(22, 19, 45, 0.97);
+  --landing-border: rgba(139, 92, 246, 0.28);
+  --landing-muted: rgba(196, 181, 253, 0.78);
+  --landing-text: #f5f3ff;
+  --landing-accent: #a78bfa;
+  --landing-accent-hover: #c4b5fd;
+  --landing-accent-solid: #7c3aed;
+
+  /* Light surfaces (admin, recruiter, report, interview room) — same hue, light, solid (no transparent grey) */
+  --surface-light: #f4f2ff;
+  --surface-light-fg: #1a1625;
+  --surface-light-fg-heading: #0f0d18;
+  --surface-light-muted: #4c4866;
+  --surface-light-muted-soft: #6b6580;
+  --surface-light-border: rgba(139, 92, 246, 0.18);
+  --surface-light-card: #ffffff;
+  --surface-light-input: #fff;
+
+  /* Accent (buttons, links, focus) — one brand color */
+  --accent: #7c3aed;
+  --accent-hover: #8b5cf6;
+  --accent-muted: rgba(124, 58, 237, 0.15);
+  --accent-ring: rgba(124, 58, 237, 0.35);
+
+  /* Semantic (keep minimal, same grade where possible) */
+  --success-bg: rgba(16, 185, 129, 0.12);
+  --success-text: #047857;
+  --success-border: rgba(16, 185, 129, 0.35);
+  --error-bg: rgba(239, 68, 68, 0.12);
+  --error-text: #b91c1c;
+  --error-border: rgba(239, 68, 68, 0.35);
+  --warning-bg: rgba(245, 158, 11, 0.12);
+  --warning-text: #b45309;
+  --warning-border: rgba(245, 158, 11, 0.35);
+}
+
+/* Explicit dark theme (when user selects dark) — surfaces match :root */
+[data-theme="dark"] {
+  --surface-light: #1a1625;
+  --surface-light-fg: #f5f3ff;
+  --surface-light-fg-heading: #f5f3ff;
+  --surface-light-muted: rgba(196, 181, 253, 0.75);
+  --surface-light-muted-soft: rgba(196, 181, 253, 0.6);
+  --surface-light-border: rgba(139, 92, 246, 0.25);
+  --surface-light-card: rgba(30, 27, 75, 0.9);
+  --surface-light-input: rgba(26, 22, 37, 0.95);
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  min-height: 100vh;
+  font-feature-settings: "ss01", "ss02", "cv02", "cv04";
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+/* Marketing: dark gradient background */
+.landing-gradient {
+  background: var(--landing-bg-gradient);
+}
+
+/* App (dark) surfaces — same grade as :root */
+.bg-gradient-dark {
+  background: linear-gradient(160deg, #0c0a14 0%, #15122e 45%, #0c0a14 100%);
+}
+
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--app-border);
+}
+
+/* Date/time inputs */
+input.ui-date::-webkit-calendar-picker-indicator,
+input.ui-time::-webkit-calendar-picker-indicator {
+  opacity: 0;
+}
+
+input.ui-time::-webkit-inner-spin-button,
+input.ui-time::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Recruiter / light-theme: cards + text grading on white */
+[data-theme="light"] {
+  color: var(--surface-light-fg);
+}
+[data-theme="light"] .card-default {
+  background: var(--surface-light-card);
+  border-color: var(--surface-light-border);
+  color: var(--surface-light-fg);
+}
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3,
+[data-theme="light"] h4 {
+  color: var(--surface-light-fg-heading);
+}
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: var(--surface-light-muted-soft);
+}
+
+/* Light theme: secondary button visible on white (text + border) */
+[data-theme="light"] .btn-secondary {
+  border-color: var(--surface-light-border);
+  background: var(--surface-light-card);
+  color: var(--surface-light-fg);
+}
+[data-theme="light"] .btn-secondary:hover {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+[data-theme="light"] .btn-secondary:focus-visible {
+  --tw-ring-color: var(--accent-ring);
+  --tw-ring-offset-color: var(--surface-light);
+}
+
+/* ——— Light theme: white/light backgrounds, dark text (app-wide) ——— */
+[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #1a1625;
+  --card-bg: #ffffff;
+  --border-subtle: rgba(139, 92, 246, 0.2);
+  --app-muted: #4c4866;
+  --app-border: rgba(139, 92, 246, 0.18);
+
+  --landing-bg: #ffffff;
+  --landing-bg-gradient: linear-gradient(180deg, #ffffff 0%, #f8f7fc 50%, #f4f2ff 100%);
+  --landing-surface: rgba(255, 255, 255, 0.95);
+  --landing-surface-solid: #ffffff;
+  --landing-border: rgba(139, 92, 246, 0.2);
+  --landing-muted: #4c4866;
+  --landing-text: #1a1625;
+  --landing-accent: #6d28d9;
+  --landing-accent-hover: #5b21b6;
+  --landing-accent-solid: #6d28d9;
+
+  --surface-light: #ffffff;
+  --surface-light-fg: #1a1625;
+  --surface-light-fg-heading: #0f0d18;
+  --surface-light-muted: #4c4866;
+  --surface-light-muted-soft: #6b6580;
+  --surface-light-border: rgba(139, 92, 246, 0.18);
+  --surface-light-card: #ffffff;
+  --surface-light-input: #ffffff;
+}
+
+[data-theme="light"] body {
+  color: var(--foreground);
+  background: var(--background);
+}
+
+[data-theme="light"] .landing-gradient {
+  background: var(--landing-bg-gradient);
+}
+
+[data-theme="light"] .bg-gradient-dark {
+  background: linear-gradient(160deg, #f4f2ff 0%, #e9e5ff 50%, #f4f2ff 100%);
+}
+
+[data-theme="light"] .glass-card {
+  background: var(--surface-light-card);
+  border-color: var(--surface-light-border);
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .pb-safe {
+    padding-bottom: max(1.5rem, var(--safe-area-bottom));
+  }
+}

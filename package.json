@@ -1,0 +1,33 @@
+{
+  "name": "ai-interviewer-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@mediapipe/tasks-vision": "^0.10.32",
+    "@uiw/codemirror-theme-github": "^4.25.4",
+    "@uiw/react-codemirror": "^4.25.4",
+    "framer-motion": "^12.34.3",
+    "lucide-react": "^0.575.0",
+    "next": "14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.6.0",
+    "socket.io-client": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.3"
+  }
+}

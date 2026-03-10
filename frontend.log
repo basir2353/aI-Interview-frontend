@@ -1,0 +1,71 @@
+
+> ai-interviewer-frontend@1.0.0 dev
+> next dev
+
+   ▲ Next.js 14.0.4
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 3s
+ ✓ Compiled /api/proxy/[...path] in 430ms (38 modules)
+[Proxy] POST http://localhost:3000/api/proxy/interview/start -> http://127.0.0.1:4000/api/v1/interview/start
+[Proxy] POST http://localhost:3000/api/proxy/interview/start -> http://127.0.0.1:4000/api/v1/interview/start
+[Proxy] GET http://localhost:3000/api/proxy/interview/13e0ee22-91b5-460f-99cd-49daa48dbf9d/state -> http://127.0.0.1:4000/api/v1/interview/13e0ee22-91b5-460f-99cd-49daa48dbf9d/state
+ ✓ Compiled in 129ms (38 modules)
+ ○ Compiling /interview/[id] ...
+ ✓ Compiled /interview/[id] in 3.7s (557 modules)
+ ✓ Compiled in 111ms (276 modules)
+ ✓ Compiled /not-found in 212ms (548 modules)
+ ✓ Compiled /interview/join/[token] in 236ms (554 modules)
+ ✓ Compiled in 471ms (527 modules)
+ ✓ Compiled /api/proxy/[...path] in 256ms (285 modules)
+ ✓ Compiled in 242ms (549 modules)
+ ✓ Compiled in 214ms (549 modules)
+ ✓ Compiled in 273ms (549 modules)
+ ✓ Compiled in 225ms (549 modules)
+ ○ Compiling /not-found ...
+ ✓ Compiled /not-found in 880ms (554 modules)
+ ✓ Compiled /interview in 198ms (560 modules)
+ ✓ Compiled in 458ms (533 modules)
+ ✓ Compiled /api/proxy/[...path] in 105ms (289 modules)
+ ✓ Compiled in 360ms (555 modules)
+ ✓ Compiled in 1031ms (569 modules)
+ ✓ Compiled in 744ms (547 modules)
+ ✓ Compiled in 222ms (280 modules)
+ ✓ Compiled in 135ms (280 modules)
+ ✓ Compiled in 112ms (280 modules)
+ ✓ Compiled in 120ms (280 modules)
+ ✓ Compiled in 109ms (280 modules)
+ ✓ Compiled in 152ms (280 modules)
+ ✓ Compiled in 116ms (280 modules)
+ ✓ Compiled in 125ms (280 modules)
+ ✓ Compiled in 103ms (280 modules)
+ ✓ Compiled in 145ms (280 modules)
+ ✓ Compiled in 344ms (547 modules)
+   Reload env: .env.local
+ ✓ Compiled in 111ms (533 modules)
+ ✓ Compiled /api/proxy/[...path] in 187ms (289 modules)
+Proxy Error: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15845:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:4000
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+    errno: -61,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 4000
+  }
+}
+Proxy Error: TypeError: fetch failed
+    at node:internal/deps/undici/undici:15845:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:4000
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+    errno: -61,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 4000
+  }
+}
