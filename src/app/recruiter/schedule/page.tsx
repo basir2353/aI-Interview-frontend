@@ -50,7 +50,7 @@ export default function RecruiterSchedulePage() {
   const [focusAreas, setFocusAreas] = useState('');
   const [requirements, setRequirements] = useState('');
   const [questionLines, setQuestionLines] = useState('');
-  const [codingQuestionLines, setCodingQuestionLines] = useState('');
+  const [codingQuestionText, setCodingQuestionText] = useState('');
   const [codingLanguage, setCodingLanguage] = useState('javascript');
   const [starterCode, setStarterCode] = useState('');
   const [candidateMessage, setCandidateMessage] = useState('');
@@ -89,10 +89,6 @@ export default function RecruiterSchedulePage() {
     () => questionLines.split('\n').map((line) => line.trim()).filter(Boolean),
     [questionLines]
   );
-  const codingQuestions = useMemo(
-    () => codingQuestionLines.split('\n').map((line) => line.trim()).filter(Boolean),
-    [codingQuestionLines]
-  );
 
   const scheduleInterview = async () => {
     if (!application) return;
@@ -118,15 +114,10 @@ export default function RecruiterSchedulePage() {
         text,
         difficulty,
       }));
-      const codingQuestionPayload: RecruiterCustomQuestionInput[] =
-        role === 'technical'
-          ? codingQuestions.map((text) => ({
-              text,
-              difficulty,
-              language: codingLanguage,
-              starterCode: starterCode.trim() || undefined,
-            }))
-          : [];
+      const trimmedCodingQuestion = codingQuestionText.trim();
+      const codingQuestionPayload: RecruiterCustomQuestionInput[] = trimmedCodingQuestion
+        ? [{ text: trimmedCodingQuestion, difficulty, language: codingLanguage, starterCode: starterCode.trim() || undefined }]
+        : [];
 
       const created = await api.recruiterScheduleFromApplication(application.id, {
         scheduledAt,
@@ -267,39 +258,70 @@ export default function RecruiterSchedulePage() {
                   rows={6}
                   value={questionLines}
                   onChange={(e) => setQuestionLines(e.target.value)}
-                  placeholder="Custom questions (one per line)"
+                  placeholder="Custom verbal questions (one per line)"
                   className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)] md:col-span-2"
                 />
-                {role === 'technical' && (
-                  <>
-                    <textarea
-                      rows={5}
-                      value={codingQuestionLines}
-                      onChange={(e) => setCodingQuestionLines(e.target.value)}
-                      placeholder="Coding/programming questions (one per line)"
-                      className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)] md:col-span-2"
-                    />
+
+                {/* Coding Question — available for all roles, always asked last */}
+                <div className="md:col-span-2 rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent-muted)] p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <svg className="w-4 h-4 text-[var(--accent)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[var(--accent)]">Coding Question — Last Question</p>
+                      <p className="text-xs text-[var(--surface-light-muted)] mt-0.5">
+                        Add one coding problem to be asked at the very end of the interview. The candidate will see a live code editor with a run/terminal panel automatically.
+                      </p>
+                    </div>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={codingQuestionText}
+                    onChange={(e) => setCodingQuestionText(e.target.value)}
+                    placeholder="Describe the coding problem (e.g. Write a function that returns the Fibonacci sequence up to n terms)"
+                    className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <select
                       value={codingLanguage}
                       onChange={(e) => setCodingLanguage(e.target.value)}
                       className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
                     >
-                      <option value="javascript">Coding language: JavaScript</option>
-                      <option value="typescript">Coding language: TypeScript</option>
-                      <option value="python">Coding language: Python</option>
-                      <option value="java">Coding language: Java</option>
-                      <option value="cpp">Coding language: C++</option>
-                      <option value="go">Coding language: Go</option>
+                      <option value="javascript">Language: JavaScript</option>
+                      <option value="typescript">Language: TypeScript</option>
+                      <option value="python">Language: Python</option>
+                      <option value="java">Language: Java</option>
+                      <option value="cpp">Language: C++</option>
+                      <option value="go">Language: Go</option>
                     </select>
-                    <textarea
-                      rows={5}
-                      value={starterCode}
-                      onChange={(e) => setStarterCode(e.target.value)}
-                      placeholder="Starter code for coding questions (optional)"
-                      className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 font-mono text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)] md:col-span-2"
-                    />
-                  </>
-                )}
+                    <p className="flex items-center text-xs text-[var(--surface-light-muted)]">
+                      Candidate writes &amp; runs code in-browser — output shown in terminal panel.
+                    </p>
+                  </div>
+                  <textarea
+                    rows={5}
+                    value={starterCode}
+                    onChange={(e) => setStarterCode(e.target.value)}
+                    placeholder={`Starter code / function skeleton (optional)\ne.g.\nfunction fibonacci(n) {\n  // your code here\n}`}
+                    className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 font-mono text-xs text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
+                  />
+                  {!codingQuestionText.trim() && (
+                    <p className="text-xs text-[var(--surface-light-muted)] italic">Leave blank to skip the coding question.</p>
+                  )}
+                  {codingQuestionText.trim() && (
+                    <div className="flex items-center gap-2 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] px-3 py-2">
+                      <svg className="w-4 h-4 text-[var(--success-text)] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <p className="text-xs font-medium text-[var(--success-text)]">
+                        Coding question added — will be asked as the last question with the code editor shown automatically.
+                      </p>
+                    </div>
+                  )}
+                </div>
                 <textarea
                   rows={3}
                   value={candidateMessage}

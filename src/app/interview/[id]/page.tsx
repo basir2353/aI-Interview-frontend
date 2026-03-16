@@ -9,6 +9,7 @@ import type { InterviewState, InterviewReport } from '@/types';
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/AudioRecorder';
 import { VideoPreview } from '@/components/VideoPreview';
 import { CodeEditor } from '@/components/CodeEditor';
+import { HeyGenAvatar, type HeyGenAvatarHandle } from '@/components/HeyGenAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis, type EmotionLabel } from '@/hooks/useInterviewFaceAnalysis';
 import { waitForSpeechVoices, pickPreferredInterviewerVoice } from '@/lib/voicePreferences';
@@ -49,6 +50,8 @@ export default function LiveInterviewPage() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [showNotesAlert, setShowNotesAlert] = useState(true);
   const [notepadNotes, setNotepadNotes] = useState('');
+  /** When true, user has clicked "Open code" so we show Code tab + editor/terminal even if no coding question yet */
+  const [codePanelRequested, setCodePanelRequested] = useState(false);
   const [interviewLang, setInterviewLang] = useState<string>(() => {
     if (typeof window === 'undefined') return 'en-US';
     return window.localStorage.getItem('interviewLanguage') || 'en-US';
@@ -70,6 +73,11 @@ export default function LiveInterviewPage() {
   const endedByUnloadRef = useRef(false);
   const hasRunStartPromptRef = useRef(false);
   const skipFirstTurnIdRef = useRef<string | null>(null);
+
+  // HeyGen real-person avatar — speaks AI turns, disables browser TTS once ready
+  const heyGenAvatarRef = useRef<HeyGenAvatarHandle>(null);
+  const [heyGenReady, setHeyGenReady] = useState(false);
+  const heyGenLastSpokenRef = useRef<string | null>(null);
 
   const faceAnalysis = useInterviewFaceAnalysis({
     videoRef: cameraVideoRef,
@@ -117,7 +125,7 @@ export default function LiveInterviewPage() {
   const skipTurnIds = skipFirstTurnIdRef.current
     ? new Set<string>([skipFirstTurnIdRef.current])
     : null;
-  const { stopSpeaking, speakText } = useInterviewerVoice(state?.turns, voiceEnabled, {
+  const { stopSpeaking, speakText } = useInterviewerVoice(state?.turns, voiceEnabled && !heyGenReady, {
     onAutoSpeakStart: () => {
       clearAutoListenTimeout();
       autoListeningRef.current = false;
@@ -424,6 +432,42 @@ export default function LiveInterviewPage() {
     void runVoiceIntro();
   }, [state, report, handleStartScreenShare, speakText, interviewLang, startAutoListeningWindow]);
 
+  // Called by HeyGenAvatar when its WebRTC session is established and the avatar is ready to speak.
+  // From this point forward, HeyGen speaks AI turns (browser TTS is disabled via heyGenReady).
+  const handleHeyGenReady = useCallback(() => {
+    // Cancel any ongoing browser TTS (welcome intro or ongoing question)
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    // Mark current last AI turn as already-spoken so HeyGen doesn't re-read it
+    const currentLastAi = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
+    heyGenLastSpokenRef.current = currentLastAi?.id ?? null;
+    setHeyGenReady(true);
+  }, [state?.turns]);
+
+  const handleHeyGenSpeakStart = useCallback(() => {
+    clearAutoListenTimeout();
+    autoListeningRef.current = false;
+    noSpeechRetryRef.current = 0;
+    audioRecorderRef.current?.stop();
+  }, [clearAutoListenTimeout]);
+
+  const handleHeyGenSpeakEnd = useCallback(() => {
+    noSpeechRetryRef.current = 0;
+    setTimeout(() => {
+      if (!loading && voiceEnabled) startAutoListeningWindow();
+    }, 220);
+  }, [loading, voiceEnabled, startAutoListeningWindow]);
+
+  // Watch for new AI turns and speak them through the HeyGen real-person avatar
+  useEffect(() => {
+    if (!heyGenReady || !state?.turns) return;
+    const lastAiTurn = [...state.turns].reverse().find((t) => t.role === 'ai');
+    if (!lastAiTurn || lastAiTurn.id === heyGenLastSpokenRef.current) return;
+    heyGenLastSpokenRef.current = lastAiTurn.id;
+    void heyGenAvatarRef.current?.speak(lastAiTurn.content);
+  }, [state?.turns, heyGenReady]);
+
   useEffect(() => {
     return () => {
       clearAutoListenTimeout();
@@ -569,12 +613,14 @@ export default function LiveInterviewPage() {
   const isTechnical = roleStr === 'technical' || /technical/.test(roleStr);
   const firstAiContent = state?.turns?.find((t) => t.role === 'ai')?.content ?? '';
   const contentSuggestsTechnical = /technical/i.test(firstAiContent);
-  /** Technical interviews: show Code tab from the start. Non-technical: show Notepad tab. */
-  const showCodeTab = Boolean(state && (isTechnical || codingTurnActive || contentSuggestsTechnical));
+  /** Technical interviews: show Code tab from the start. Non-technical: show Notepad tab unless user opened code panel. */
+  const showCodeTab = Boolean(state && (isTechnical || codingTurnActive || contentSuggestsTechnical || codePanelRequested));
   const showNotepadTab = Boolean(state && !showCodeTab);
   const interviewerDisplayName = isTechnical ? 'Ethan (Intervion AI)' : 'ZaraAlex (Intervion AI)';
   /** Always show Interview + (Code or Notepad) tab bar when we have interview state. */
   const showTabBar = Boolean(state);
+  /** When true, use 50/50 split: left = interview, right = code editor + terminal. */
+  const codePanelOpen = (showCodeTab && activeTab === 'code') || (codingTurnActive && !showCodeTab);
 
   const elapsedSeconds = state?.startedAt
     ? Math.max(0, Math.floor((nowTs - new Date(state.startedAt).getTime()) / 1000))
@@ -660,11 +706,17 @@ export default function LiveInterviewPage() {
             <ul className="list-none space-y-0.5 text-[var(--surface-light-muted)]">
               <li>• Share your screen when the browser asks — choose window or entire screen.</li>
               <li>• Do not use external AI, search, or other assistance.</li>
-              {showCodeTab && (
+              {showCodeTab && !codingTurnActive && (
                 <li>• <strong>Code tab:</strong> For coding questions, click <strong>Code</strong> in the header to open the editor and submit your solution.</li>
               )}
-              {showNotepadTab && (
+              {codingTurnActive && (
+                <li>• <strong>Code tab is now active:</strong> A code editor and terminal have opened automatically — write, run, and submit your solution there.</li>
+              )}
+              {showNotepadTab && !codingTurnActive && (
                 <li>• <strong>Notepad tab:</strong> Your notes are saved on your device only. Use it to jot down points during the interview.</li>
+              )}
+              {!showCodeTab && !codingTurnActive && (
+                <li>• <strong>Coding question:</strong> If a coding problem is scheduled as the last question, a code editor and terminal will open automatically when it is asked.</li>
               )}
               <li>• Your mic turns on automatically after each question so you can answer.</li>
               <li>• You can stop screen share anytime via &quot;Stop sharing&quot; or the control bar.</li>
@@ -681,40 +733,167 @@ export default function LiveInterviewPage() {
       )}
 
       <div className="relative min-h-0 flex-1 px-4 pb-24 pt-2 sm:px-6">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative flex h-40 w-40 items-center justify-center">
-            <div className="absolute inset-0 animate-ping rounded-full bg-[var(--accent)]/30" />
-            <div className="absolute inset-4 rounded-full bg-[var(--accent-muted)] blur-md" />
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] text-2xl font-bold text-[var(--surface-light-fg)] shadow-lg">
-              m.
+        {codePanelOpen ? (
+          <div className="flex h-full w-full flex-row gap-3 sm:gap-4">
+            {/* Left half — interview: camera, screen share, current question (narrow cards) */}
+            <div className="flex min-w-0 flex-1 flex-col items-center overflow-hidden">
+              <div className="w-full max-w-[280px] sm:max-w-[300px] flex flex-col gap-4">
+              <div className="flex shrink-0 items-center justify-center py-2">
+                <HeyGenAvatar
+                  ref={heyGenAvatarRef}
+                  name={interviewerDisplayName.split(' ')[0]}
+                  subtitle="Intervion AI"
+                  avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
+                  size="sm"
+                  onReady={handleHeyGenReady}
+                  onSpeakStart={handleHeyGenSpeakStart}
+                  onSpeakEnd={handleHeyGenSpeakEnd}
+                />
+              </div>
+              {screenStream && (
+                <div className="shrink-0 w-full overflow-hidden rounded-xl border-2 border-[var(--accent)] bg-[var(--surface-light-card)] shadow-lg">
+                  <div className="flex items-center justify-between border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+                    <span>Sharing screen</span>
+                    <button
+                      type="button"
+                      onClick={handleStopScreenShare}
+                      className="rounded-lg bg-[var(--accent)] px-2 py-1 text-white hover:bg-[var(--accent-hover)]"
+                    >
+                      Stop sharing
+                    </button>
+                  </div>
+                  <div className="aspect-video bg-[var(--background)]">
+                    <video ref={screenVideoRef} autoPlay muted playsInline className="h-full w-full object-contain" />
+                  </div>
+                </div>
+              )}
+              <div className="shrink-0 space-y-2">
+                <div className="overflow-hidden rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] shadow-xl backdrop-blur">
+                  <div className="border-b border-[var(--surface-light-border)] px-3 py-2 text-xs font-medium text-[var(--surface-light-muted)]">
+                    Your camera
+                  </div>
+                  <div className="h-[140px] sm:h-[160px] bg-[var(--background)]">
+                    <VideoPreview
+                      compact
+                      active={cameraOn}
+                      onActiveChange={setCameraOn}
+                      micMuted={!micOn}
+                      videoRef={cameraVideoRef}
+                    />
+                  </div>
+                </div>
+                {cameraOn && (
+                  <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 shadow-sm">
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--surface-light-muted)]">Live analysis</p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${faceAnalysis.faceDetected ? 'bg-[var(--success-text)]' : 'bg-[var(--surface-light-muted)]'}`} />
+                        <span>{faceAnalysis.faceDetected ? 'Face detected' : 'No face'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[var(--surface-light-muted)]">Emotion:</span>
+                        <span className="capitalize">{emotionLabel(faceAnalysis.emotion)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2.5 shadow-sm overflow-hidden">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
+                  <p className="text-sm font-medium text-[var(--surface-light-fg)] line-clamp-2">Current question</p>
+                  <p className="text-xs text-[var(--surface-light-muted)] line-clamp-3 whitespace-pre-wrap">{currentQuestion}</p>
+                </div>
+              </div>
+              </div>
+            </div>
+            {/* Right half — code editor + terminal */}
+            <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-3 shadow-sm">
+              {codingTurnActive ? (
+                <>
+                  <div className="shrink-0 rounded-lg border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm text-[var(--surface-light-fg)] shadow-sm whitespace-pre-wrap overflow-auto max-h-24">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
+                    {currentQuestion}
+                  </div>
+                  <div className="min-h-0 flex-1 flex flex-col">
+                    <CodeEditor value={codeAnswer} onChange={setCodeAnswer} disabled={loading} minHeight="200px" />
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={codeNotes}
+                    onChange={(e) => setCodeNotes(e.target.value)}
+                    placeholder="Optional explanation"
+                    className="w-full shrink-0 rounded-lg border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-xs text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)]"
+                  />
+                  <div className="shrink-0 flex items-center justify-between gap-2">
+                    <p className="text-xs text-[var(--surface-light-muted)]">Submit your code as answer.</p>
+                    <button
+                      onClick={handleSubmitCodeAnswer}
+                      disabled={loading}
+                      className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+                    >
+                      {loading ? 'Submitting…' : 'Submit code answer'}
+                    </button>
+                  </div>
+                  {error && (
+                    <p className="rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-2 text-xs text-[var(--error-text)]">{error}</p>
+                  )}
+                </>
+              ) : codePanelRequested ? (
+                <>
+                  <div className="shrink-0 rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-3 py-2 text-sm text-[var(--surface-light-fg)]">
+                    <p className="font-semibold text-[var(--accent)]">Code editor &amp; terminal</p>
+                    <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Write code and click <strong>Run</strong> to see output. When a coding question is asked, submit here.</p>
+                  </div>
+                  <div className="min-h-0 flex-1 flex flex-col">
+                    <CodeEditor value={codeAnswer} onChange={setCodeAnswer} disabled={loading} minHeight="200px" />
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-4 py-4 text-sm text-[var(--surface-light-fg)]">
+                  <p className="font-semibold text-[var(--accent)]">Code</p>
+                  <p className="mt-2 text-[var(--surface-light-muted)]">Coding questions will appear here when the interviewer asks one.</p>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-
-        {screenStream && (
-          <div className="absolute left-6 top-20 z-20 w-[320px] overflow-hidden rounded-2xl border-2 border-[var(--accent)] bg-[var(--surface-light-card)] shadow-xl">
-            <div className="flex items-center justify-between border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
-              <span>Sharing screen</span>
-              <button
-                type="button"
-                onClick={handleStopScreenShare}
-                className="rounded-lg bg-[var(--accent)] px-2 py-1 text-white hover:bg-[var(--accent-hover)]"
-              >
-                Stop sharing
-              </button>
+        ) : (
+          <>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <HeyGenAvatar
+                ref={heyGenAvatarRef}
+                name={interviewerDisplayName.split(' ')[0]}
+                subtitle="Intervion AI"
+                avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
+                size="lg"
+                onReady={handleHeyGenReady}
+                onSpeakStart={handleHeyGenSpeakStart}
+                onSpeakEnd={handleHeyGenSpeakEnd}
+              />
             </div>
-            <div className="aspect-video bg-[var(--background)]">
-              <video ref={screenVideoRef} autoPlay muted playsInline className="h-full w-full object-contain" />
-            </div>
-          </div>
-        )}
 
-        <div className="absolute bottom-8 left-6 w-[280px] space-y-2">
-          <div className="overflow-hidden rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] shadow-xl backdrop-blur">
+            {screenStream && (
+              <div className="absolute left-6 top-20 z-20 w-[320px] overflow-hidden rounded-2xl border-2 border-[var(--accent)] bg-[var(--surface-light-card)] shadow-xl">
+                <div className="flex items-center justify-between border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+                  <span>Sharing screen</span>
+                  <button
+                    type="button"
+                    onClick={handleStopScreenShare}
+                    className="rounded-lg bg-[var(--accent)] px-2 py-1 text-white hover:bg-[var(--accent-hover)]"
+                  >
+                    Stop sharing
+                  </button>
+                </div>
+                <div className="aspect-video bg-[var(--background)]">
+                  <video ref={screenVideoRef} autoPlay muted playsInline className="h-full w-full object-contain" />
+                </div>
+              </div>
+            )}
+
+            <div className="absolute bottom-8 left-6 w-[260px] sm:w-[280px] space-y-2">
+          <div className="overflow-hidden rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] shadow-lg backdrop-blur">
             <div className="border-b border-[var(--surface-light-border)] px-3 py-2 text-xs font-medium text-[var(--surface-light-muted)]">
               Your camera
             </div>
-            <div className="h-[190px] bg-[var(--background)]">
+            <div className="h-[160px] sm:h-[180px] bg-[var(--background)]">
               <VideoPreview
                 compact
                 active={cameraOn}
@@ -786,6 +965,16 @@ export default function LiveInterviewPage() {
                   <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
                 )}
               </>
+            ) : codePanelRequested ? (
+              <>
+                <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-4 py-3 text-sm text-[var(--surface-light-fg)]">
+                  <p className="font-semibold text-[var(--accent)]">Code editor &amp; terminal</p>
+                  <p className="mt-1 text-[var(--surface-light-muted)]">Write code and click <strong>Run</strong> to see output below. When a coding question is asked, submit your solution here.</p>
+                </div>
+                <div className="h-[calc(100%-120px)]">
+                  <CodeEditor value={codeAnswer} onChange={setCodeAnswer} disabled={loading} minHeight="260px" />
+                </div>
+              </>
             ) : (
               <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-4 py-4 text-sm text-[var(--surface-light-fg)]">
                 {currentQuestion ? (
@@ -793,12 +982,13 @@ export default function LiveInterviewPage() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
                     <p className="font-semibold text-[var(--accent)]">Voice question (answer in Interview tab)</p>
                     <p className="mt-2 leading-7">{currentQuestion}</p>
-                    <p className="mt-3 text-xs text-[var(--surface-light-muted)]">Switch to the <strong>Interview</strong> tab and use your microphone to answer.</p>
+                    <p className="mt-3 text-xs text-[var(--surface-light-muted)]">Switch to the <strong>Interview</strong> tab and use your microphone to answer. Or click the <strong>code</strong> button in the control bar to open the editor.</p>
                   </>
                 ) : (
                   <>
                     <p className="font-semibold text-[var(--accent)]">Code</p>
                     <p className="mt-2 text-[var(--surface-light-muted)]">Coding questions will appear here when the interviewer asks one. Use the <strong>Interview</strong> tab for voice questions.</p>
+                    <p className="mt-2 text-xs text-[var(--surface-light-muted)]">You can open the code editor anytime with the <strong>{'</>'}</strong> button in the control bar below.</p>
                   </>
                 )}
               </div>
@@ -887,6 +1077,8 @@ export default function LiveInterviewPage() {
             )}
           </div>
         )}
+          </>
+        )}
 
         <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-2 shadow-lg backdrop-blur">
           <button
@@ -924,6 +1116,21 @@ export default function LiveInterviewPage() {
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCodePanelRequested(true);
+              setActiveTab('code');
+            }}
+            className={`flex h-10 w-10 items-center justify-center rounded-full text-white transition ${
+              activeTab === 'code' ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]' : 'bg-[var(--surface-light-muted)] hover:opacity-90'
+            } disabled:opacity-50`}
+            title="Open code editor & terminal"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
           </button>
           <button
