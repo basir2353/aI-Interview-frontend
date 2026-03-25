@@ -144,16 +144,23 @@ export default function RecruiterApplicantsPage() {
                 <p className="mt-1 text-sm text-[var(--surface-light-fg)]">
                   {app.position_title} • {app.position_role}
                   {app.match_score != null && (
-                    <span
-                      className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        app.match_score >= 60
-                          ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
-                          : app.match_score >= 35
-                            ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]'
-                            : 'bg-[var(--accent-muted)] text-[var(--surface-light-muted)]'
-                      }`}
-                    >
-                      Match: {app.match_score}%
+                    <span className="ml-2 inline-flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          app.match_score >= 60
+                            ? 'bg-[var(--success-bg)] text-[var(--success-text)]'
+                            : app.match_score >= 35
+                              ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]'
+                              : 'bg-[var(--accent-muted)] text-[var(--surface-light-muted)]'
+                        }`}
+                      >
+                        Match: {app.match_score}%
+                      </span>
+                      {app.match_score >= 60 && (
+                        <span className="inline-flex items-center rounded-full bg-[var(--accent-muted)] px-2 py-0.5 text-xs font-semibold text-[var(--accent)] ring-1 ring-[var(--accent)]">
+                          Recommended
+                        </span>
+                      )}
                     </span>
                   )}
                 </p>

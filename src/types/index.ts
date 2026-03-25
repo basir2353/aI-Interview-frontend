@@ -17,6 +17,8 @@ export interface Turn {
   codingStarterCode?: string | null;
   codingLanguage?: string | null;
   isCodingQuestion?: boolean;
+  /** Talking-head video URL for this AI turn (SadTalker + Wav2Lip + Coqui TTS). */
+  avatarVideo?: string;
 }
 
 export interface AnswerEvaluation {
@@ -81,11 +83,15 @@ export interface StartInterviewResponse {
   interviewId: string;
   state: InterviewState;
   firstReply: string;
+  /** Talking-head video URL for firstReply when avatar pipeline is enabled. */
+  avatarVideo?: string;
 }
 
 export interface SubmitAnswerResponse {
   state: InterviewState | null;
   nextReply?: string;
+  /** Talking-head video URL for nextReply when avatar pipeline is enabled. */
+  avatarVideo?: string;
   evaluation?: { score: number; maxScore: number };
   report?: InterviewReport;
 }

@@ -11,6 +11,10 @@ const nextConfig = {
         source: '/api/backend/:path*',
         destination: 'http://localhost:4000/api/v1/:path*',
       });
+      rewrites.push({
+        source: '/uploads/:path*',
+        destination: 'http://localhost:4000/uploads/:path*',
+      });
     }
     return rewrites;
   },

@@ -10,6 +10,7 @@ import { AudioRecorder, type AudioRecorderHandle } from '@/components/AudioRecor
 import { VideoPreview } from '@/components/VideoPreview';
 import { CodeEditor } from '@/components/CodeEditor';
 import { HeyGenAvatar, type HeyGenAvatarHandle } from '@/components/HeyGenAvatar';
+import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis, type EmotionLabel } from '@/hooks/useInterviewFaceAnalysis';
 import { waitForSpeechVoices, pickPreferredInterviewerVoice } from '@/lib/voicePreferences';
@@ -739,16 +740,25 @@ export default function LiveInterviewPage() {
             <div className="flex min-w-0 flex-1 flex-col items-center overflow-hidden">
               <div className="w-full max-w-[280px] sm:max-w-[300px] flex flex-col gap-4">
               <div className="flex shrink-0 items-center justify-center py-2">
-                <HeyGenAvatar
-                  ref={heyGenAvatarRef}
-                  name={interviewerDisplayName.split(' ')[0]}
-                  subtitle="Intervion AI"
-                  avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
-                  size="sm"
-                  onReady={handleHeyGenReady}
-                  onSpeakStart={handleHeyGenSpeakStart}
-                  onSpeakEnd={handleHeyGenSpeakEnd}
-                />
+                {lastAiTurn?.avatarVideo ? (
+                  <AIAvatar
+                    videoUrl={lastAiTurn.avatarVideo}
+                    name={interviewerDisplayName.split(' ')[0]}
+                    subtitle="Intervion AI"
+                    size="sm"
+                  />
+                ) : (
+                  <HeyGenAvatar
+                    ref={heyGenAvatarRef}
+                    name={interviewerDisplayName.split(' ')[0]}
+                    subtitle="Intervion AI"
+                    avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
+                    size="sm"
+                    onReady={handleHeyGenReady}
+                    onSpeakStart={handleHeyGenSpeakStart}
+                    onSpeakEnd={handleHeyGenSpeakEnd}
+                  />
+                )}
               </div>
               {screenStream && (
                 <div className="shrink-0 w-full overflow-hidden rounded-xl border-2 border-[var(--accent)] bg-[var(--surface-light-card)] shadow-lg">
@@ -858,16 +868,25 @@ export default function LiveInterviewPage() {
         ) : (
           <>
             <div className="absolute inset-0 flex items-center justify-center">
-              <HeyGenAvatar
-                ref={heyGenAvatarRef}
-                name={interviewerDisplayName.split(' ')[0]}
-                subtitle="Intervion AI"
-                avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
-                size="lg"
-                onReady={handleHeyGenReady}
-                onSpeakStart={handleHeyGenSpeakStart}
-                onSpeakEnd={handleHeyGenSpeakEnd}
-              />
+              {lastAiTurn?.avatarVideo ? (
+                <AIAvatar
+                  videoUrl={lastAiTurn.avatarVideo}
+                  name={interviewerDisplayName.split(' ')[0]}
+                  subtitle="Intervion AI"
+                  size="lg"
+                />
+              ) : (
+                <HeyGenAvatar
+                  ref={heyGenAvatarRef}
+                  name={interviewerDisplayName.split(' ')[0]}
+                  subtitle="Intervion AI"
+                  avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
+                  size="lg"
+                  onReady={handleHeyGenReady}
+                  onSpeakStart={handleHeyGenSpeakStart}
+                  onSpeakEnd={handleHeyGenSpeakEnd}
+                />
+              )}
             </div>
 
             {screenStream && (
