@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
+import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import {
@@ -182,6 +183,7 @@ export default function RecruiterJobsPage() {
         </div>
       )}
       <div className="space-y-8">
+        <RecruiterSubnav />
         {error && (
           <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm font-medium text-[var(--error-text)]">
             {error}

@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 interface VideoPreviewProps {
   /** Compact Meet-style self-view (floating tile with indicators) */
   compact?: boolean;
+  /** With `compact`: `floating` = corner tile; `fill` = cover a relative, sized parent (interview side panel). */
+  compactLayout?: 'floating' | 'fill';
   /** Controlled: camera on/off */
   active?: boolean;
   /** Controlled: callback when user toggles */
@@ -13,6 +15,8 @@ interface VideoPreviewProps {
   micMuted?: boolean;
   /** Optional ref to the video element for camera analysis (e.g. idle detection) */
   videoRef?: React.MutableRefObject<HTMLVideoElement | null>;
+  /** Fired when the stream is attached and play() has been requested (MediaPipe can start safely). */
+  onVideoReady?: () => void;
 }
 
 /**
@@ -20,10 +24,12 @@ interface VideoPreviewProps {
  */
 export function VideoPreview({
   compact = false,
+  compactLayout = 'floating',
   active: controlledActive,
   onActiveChange,
   micMuted = false,
   videoRef: externalVideoRef,
+  onVideoReady,
 }: VideoPreviewProps) {
   const [internalActive, setInternalActive] = useState(true);
   const active = controlledActive ?? internalActive;
@@ -32,9 +38,16 @@ export function VideoPreview({
     else setInternalActive(v);
   };
 
-  const internalVideoRef = useRef<HTMLVideoElement>(null);
-  const videoRef = externalVideoRef ?? internalVideoRef;
+  const internalVideoRef = useRef<HTMLVideoElement | null>(null);
   const [error, setError] = useState('');
+
+  const setVideoEl = (node: HTMLVideoElement | null) => {
+    if (externalVideoRef) {
+      (externalVideoRef as React.MutableRefObject<HTMLVideoElement | null>).current = node;
+    } else {
+      internalVideoRef.current = node;
+    }
+  };
 
   useEffect(() => {
     if (!active) return;
@@ -43,18 +56,28 @@ export function VideoPreview({
       .getUserMedia({ video: true, audio: false })
       .then((s) => {
         stream = s;
-        const el = videoRef.current;
-        if (el) el.srcObject = s;
+        const el = externalVideoRef ? externalVideoRef.current : internalVideoRef.current;
+        if (el) {
+          el.srcObject = s;
+          void el
+            .play()
+            .then(() => onVideoReady?.())
+            .catch(() => onVideoReady?.());
+        } else {
+          onVideoReady?.();
+        }
       })
-      .catch((e) => setError('Camera access denied or unavailable'));
+      .catch(() => setError('Camera access denied or unavailable'));
 
     return () => {
       stream?.getTracks().forEach((t) => t.stop());
     };
-  }, [active]);
+  }, [active, externalVideoRef, onVideoReady]);
 
   const baseClasses = compact
-    ? 'absolute bottom-20 right-6 w-36 aspect-video rounded-lg overflow-hidden bg-slate-800 border border-slate-600 shadow-xl'
+    ? compactLayout === 'fill'
+      ? 'absolute inset-0 rounded-lg overflow-hidden bg-slate-800 border border-slate-600/80'
+      : 'absolute bottom-20 right-6 w-36 aspect-video rounded-lg overflow-hidden bg-slate-800 border border-slate-600 shadow-xl'
     : 'absolute inset-0 rounded-lg overflow-hidden bg-slate-800';
 
   return (
@@ -74,11 +97,13 @@ export function VideoPreview({
       ) : (
         <>
           <video
-            ref={videoRef}
+            ref={setVideoEl}
             autoPlay
             muted
             playsInline
             className="w-full h-full object-cover"
+            onLoadedData={() => onVideoReady?.()}
+            onPlaying={() => onVideoReady?.()}
           />
           {compact && (
             <>

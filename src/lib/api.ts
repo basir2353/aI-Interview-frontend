@@ -5,6 +5,7 @@
 
 import type {
   InterviewRole,
+  InterviewerPersona,
   InterviewState,
   InterviewReport,
   StartInterviewResponse,
@@ -90,7 +91,12 @@ export const api = {
   },
 
   adminMe() {
-    return request<{ email: string; isSuperAdmin: boolean; permissionLevel?: 'full' | 'limited' }>('/admin/me', {
+    return request<{
+      email: string;
+      isSuperAdmin: boolean;
+      permissionLevel?: 'full' | 'limited';
+      adminUserId: string | null;
+    }>('/admin/me', {
       headers: adminAuthHeaders(),
     });
   },
@@ -224,7 +230,7 @@ export const api = {
     });
   },
 
-  adminCreateRecruiter(body: { email: string; password: string; name?: string }) {
+  adminCreateRecruiter(body: { email: string; password: string; name?: string; managedByAdminId?: string | null }) {
     return request<{ recruiter: AdminRecruiterCreateResponse }>('/admin/recruiters', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -232,12 +238,28 @@ export const api = {
     });
   },
 
-  adminUpdateRecruiter(id: string, updates: { isActive?: boolean; name?: string; permissionLevel?: 'full' | 'limited'; password?: string }) {
-    const body: { isActive?: boolean; name?: string; permissionLevel?: string; password?: string } = {};
+  adminUpdateRecruiter(
+    id: string,
+    updates: {
+      isActive?: boolean;
+      name?: string;
+      permissionLevel?: 'full' | 'limited';
+      password?: string;
+      managedByAdminId?: string | null;
+    }
+  ) {
+    const body: {
+      isActive?: boolean;
+      name?: string;
+      permissionLevel?: string;
+      password?: string;
+      managedByAdminId?: string | null;
+    } = {};
     if (updates.isActive !== undefined) body.isActive = updates.isActive;
     if (updates.name !== undefined) body.name = updates.name;
     if (updates.permissionLevel !== undefined) body.permissionLevel = updates.permissionLevel;
     if (updates.password !== undefined) body.password = updates.password;
+    if (updates.managedByAdminId !== undefined) body.managedByAdminId = updates.managedByAdminId;
     return request<{ recruiter: AdminRecruiterCreateResponse & { permission_level?: string } }>(`/admin/recruiters/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -305,6 +327,14 @@ export const api = {
     });
   },
 
+  recruiterPatchMe(body: { companyName?: string | null; interviewerPersona?: InterviewerPersona }) {
+    return request<{ recruiter: RecruiterIdentity }>('/recruiter/me', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: recruiterAuthHeaders(),
+    });
+  },
+
   recruiterGetSchedules() {
     return request<{ schedules: AdminScheduleRow[] }>('/recruiter/schedules', {
       headers: recruiterAuthHeaders(),
@@ -322,6 +352,7 @@ export const api = {
     customQuestions?: RecruiterCustomQuestionInput[];
     codingQuestions?: RecruiterCustomQuestionInput[];
     resumeUrl?: string;
+    interviewerPersona?: InterviewerPersona;
   }) {
     return request<AdminSchedule>('/recruiter/schedule', {
       method: 'POST',
@@ -525,6 +556,7 @@ export const api = {
       codingQuestions?: RecruiterCustomQuestionInput[];
       focusAreas?: string;
       durationMinutes?: number;
+      interviewerPersona?: InterviewerPersona;
     }
   ) {
     return request<AdminSchedule>(`/recruiter/applications/${applicationId}/schedule`, {
@@ -666,6 +698,8 @@ export interface RecruiterIdentity {
   id: string;
   email: string;
   name: string | null;
+  companyName?: string | null;
+  interviewerPersona?: InterviewerPersona;
 }
 
 export interface CandidateIdentity {
@@ -689,6 +723,8 @@ export interface AdminScheduleRow {
   interview_id: string | null;
   created_at: string;
   joinUrl: string;
+  interviewer_persona?: string | null;
+  interviewerPersona?: InterviewerPersona;
 }
 
 export interface AdminQuestionRow {
@@ -747,6 +783,9 @@ export interface AdminRecruiterRow {
   schedule_count: string;
   is_active: boolean;
   permission_level: 'full' | 'limited';
+  managed_by_admin_id?: string | null;
+  managed_by_email?: string | null;
+  managed_by_name?: string | null;
 }
 
 export interface AdminCandidateRow {
@@ -778,6 +817,7 @@ export interface AdminRecruiterCreateResponse {
   name: string | null;
   role: string;
   is_active: boolean;
+  managed_by_admin_id?: string | null;
 }
 
 export interface AdminOverviewSchedule {
@@ -812,6 +852,8 @@ export interface PublicJoinInfo {
   status: string;
   alreadyCompleted?: boolean;
   interviewId?: string | null;
+  interviewerPersona?: InterviewerPersona;
+  recruiterCompanyName?: string | null;
 }
 
 export interface PublicJoinStartResponse {

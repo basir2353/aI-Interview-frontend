@@ -27,6 +27,9 @@ type AccessRecruiter = {
   permissionLevel: 'full' | 'limited';
   scheduleCount: string;
   role: 'recruiter';
+  managedByAdminId?: string | null;
+  managedByAdminEmail?: string | null;
+  managedByAdminName?: string | null;
 };
 
 export default function AdminAccessPage() {
@@ -190,11 +193,12 @@ export default function AdminAccessPage() {
             </Link>
           </div>
           <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full min-w-[560px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6">Email</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6">Name</th>
+                  <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6">Managing admin</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6">Permission</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6">Status</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6">Schedules</th>
@@ -207,6 +211,9 @@ export default function AdminAccessPage() {
                   <tr key={r.id} className="hover:bg-[var(--accent-muted)]/30">
                     <td className="px-4 py-3 sm:px-6 font-medium text-[var(--surface-light-fg)]">{r.email}</td>
                     <td className="px-4 py-3 text-[var(--surface-light-muted)] sm:px-6">{r.name || '—'}</td>
+                    <td className="px-4 py-3 text-[var(--surface-light-muted)] sm:px-6">
+                      {r.managedByAdminName || r.managedByAdminEmail || (r.managedByAdminId ? '—' : 'Unassigned')}
+                    </td>
                     <td className="px-4 py-3 sm:px-6">
                       <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${r.permissionLevel === 'full' ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--surface-light-muted)] text-[var(--surface-light-fg)]'}`}>
                         {r.permissionLevel}
@@ -238,7 +245,7 @@ export default function AdminAccessPage() {
           <h3 className="font-semibold text-[var(--surface-light-fg)]">What you can do as Super Admin</h3>
           <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-[var(--surface-light-muted)]">
             <li><strong>Admins:</strong> Add admins with Access (Full or Limited), edit name/password/access, and delete. Super admin (env) cannot be edited or deleted.</li>
-            <li><strong>Recruiters:</strong> Add recruiters, set permission (full / limited), enable or disable access, change password, delete.</li>
+            <li><strong>Recruiters:</strong> Add recruiters under a specific admin (or leave unassigned), set permission (full / limited), enable or disable access, change password, delete.</li>
             <li><strong>Candidates:</strong> Super admin can edit candidate name and set/reset password from the Candidates page.</li>
             <li><strong>Full</strong> admin = can manage recruiters and view this page; <strong>Limited</strong> admin = dashboard, schedules, candidates, questions only (no admins/recruiters).</li>
           </ul>

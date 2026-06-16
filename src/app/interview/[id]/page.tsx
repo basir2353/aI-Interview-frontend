@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -9,23 +9,16 @@ import type { InterviewState, InterviewReport } from '@/types';
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/AudioRecorder';
 import { VideoPreview } from '@/components/VideoPreview';
 import { CodeEditor } from '@/components/CodeEditor';
-import { HeyGenAvatar, type HeyGenAvatarHandle } from '@/components/HeyGenAvatar';
 import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
-import { useInterviewFaceAnalysis, type EmotionLabel } from '@/hooks/useInterviewFaceAnalysis';
+import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
 import { waitForSpeechVoices, pickPreferredInterviewerVoice } from '@/lib/voicePreferences';
-
-function emotionLabel(e: EmotionLabel): string {
-  const labels: Record<EmotionLabel, string> = {
-    neutral: 'Neutral',
-    smiling: 'Smiling',
-    concentrating: 'Concentrating',
-    surprised: 'Surprised',
-    speaking: 'Speaking',
-    thinking: 'Thinking',
-  };
-  return labels[e] ?? 'Neutral';
-}
+import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
+import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
+import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
+import { InterviewInstructionsOverlay } from '@/components/interview/InterviewInstructionsOverlay';
+import { motion } from 'framer-motion';
+import { setInterviewRoomOnboarding } from '@/lib/interviewOnboardingGate';
 
 export default function LiveInterviewPage() {
   const params = useParams();
@@ -49,7 +42,8 @@ export default function LiveInterviewPage() {
   const [activeTab, setActiveTab] = useState<'interview' | 'code' | 'notepad'>('interview');
   const [waveMessageShown, setWaveMessageShown] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [showNotesAlert, setShowNotesAlert] = useState(true);
+  /** device-check → instructions (fullscreen notes) → live room */
+  const [roomPhase, setRoomPhase] = useState<'device-check' | 'instructions' | 'live'>('device-check');
   const [notepadNotes, setNotepadNotes] = useState('');
   /** When true, user has clicked "Open code" so we show Code tab + editor/terminal even if no coding question yet */
   const [codePanelRequested, setCodePanelRequested] = useState(false);
@@ -73,18 +67,17 @@ export default function LiveInterviewPage() {
   const lastCodingQuestionIdRef = useRef<string | null>(null);
   const endedByUnloadRef = useRef(false);
   const hasRunStartPromptRef = useRef(false);
-  const skipFirstTurnIdRef = useRef<string | null>(null);
 
-  // HeyGen real-person avatar — speaks AI turns, disables browser TTS once ready
-  const heyGenAvatarRef = useRef<HeyGenAvatarHandle>(null);
-  const [heyGenReady, setHeyGenReady] = useState(false);
-  const heyGenLastSpokenRef = useRef<string | null>(null);
+  const [videoReadyTick, setVideoReadyTick] = useState(0);
+  const onCameraVideoReady = useCallback(() => setVideoReadyTick((n) => n + 1), []);
+  const avatarDragBoundsRef = useRef<HTMLDivElement>(null);
 
-  const faceAnalysis = useInterviewFaceAnalysis({
+  const { faceAnalysis, modelsLoaded, loadError } = useInterviewFaceAnalysis({
     videoRef: cameraVideoRef,
     enabled: cameraOn,
     intervalMs: 120,
     onWaveDetected: () => setWaveMessageShown(true),
+    videoReadyTick,
   });
 
   useEffect(() => {
@@ -118,15 +111,15 @@ export default function LiveInterviewPage() {
     }, listenWindowMs);
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
 
-  // So the hook skips speaking the first turn; we speak it after voice instructions
-  if (state?.turns?.length === 1) {
-    const firstAi = state.turns.find((t) => t.role === 'ai');
-    if (firstAi && !skipFirstTurnIdRef.current) skipFirstTurnIdRef.current = firstAi.id;
-  }
-  const skipTurnIds = skipFirstTurnIdRef.current
-    ? new Set<string>([skipFirstTurnIdRef.current])
-    : null;
-  const { stopSpeaking, speakText } = useInterviewerVoice(state?.turns, voiceEnabled && !heyGenReady, {
+  /** First chronological AI turn id only — stable `Set` ref so useInterviewerVoice doesn't re-fire cleanup every render (that was cancelling TTS for Q2+). */
+  const firstAiTurnIdForHookSkip = state?.turns?.find((t) => t.role === 'ai')?.id ?? null;
+  const skipTurnIds = useMemo(
+    () => (firstAiTurnIdForHookSkip ? new Set<string>([firstAiTurnIdForHookSkip]) : null),
+    [firstAiTurnIdForHookSkip]
+  );
+  /** No auto-TTS during device-check / instructions — avoids overlap with the post-onboarding intro. */
+  const voiceAutoPlayActive = voiceEnabled && roomPhase === 'live';
+  const { stopSpeaking, speakText } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
     onAutoSpeakStart: () => {
       clearAutoListenTimeout();
       autoListeningRef.current = false;
@@ -161,6 +154,20 @@ export default function LiveInterviewPage() {
   useEffect(() => {
     loadState();
   }, [loadState]);
+
+  useEffect(() => {
+    const onboarding = roomPhase === 'device-check' || roomPhase === 'instructions';
+    setInterviewRoomOnboarding(onboarding);
+    return () => setInterviewRoomOnboarding(false);
+  }, [roomPhase]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const brand = 'Intervion';
+    if (roomPhase === 'device-check') document.title = `Camera & mic · ${brand}`;
+    else if (roomPhase === 'instructions') document.title = `Interview notes · ${brand}`;
+    else document.title = `Live interview · ${brand}`;
+  }, [roomPhase]);
 
   const notepadStorageKey = id ? `intervion_notes_${id}` : '';
   const notepadLoadedRef = useRef<string | null>(null);
@@ -370,6 +377,37 @@ export default function LiveInterviewPage() {
     toast.success('Screen share ended');
   }, []);
 
+  const advanceFromDeviceCheck = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    stopSpeaking();
+    /** Screen share while we still have the user gesture from “Next” (notes screen will read aloud). */
+    void handleStartScreenShare();
+    if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => {});
+    }
+    setRoomPhase('instructions');
+  }, [stopSpeaking, handleStartScreenShare]);
+
+  const enterLiveRoom = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    stopSpeaking();
+    clearAutoListenTimeout();
+    autoListeningRef.current = false;
+    noSpeechRetryRef.current = 0;
+    audioRecorderRef.current?.stop();
+    setMicOn(false);
+    /** Allow welcome + first-question intro to run from the beginning after onboarding. */
+    hasRunStartPromptRef.current = false;
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+    }
+    setRoomPhase('live');
+  }, [stopSpeaking, clearAutoListenTimeout]);
+
   useEffect(() => {
     if (!screenStream || !screenVideoRef.current) return;
     screenVideoRef.current.srcObject = screenStream;
@@ -378,21 +416,18 @@ export default function LiveInterviewPage() {
     };
   }, [screenStream]);
 
-  // When interview starts: voice-only instructions (no pop-up), then first question, then prompt for screen share
+  // Live room only: speak the first interview question (notes + screen share happen on the instructions screen, not here).
   useEffect(() => {
+    if (roomPhase !== 'live') return;
     if (!state || report || hasRunStartPromptRef.current || typeof window === 'undefined') return;
     const firstAiTurn = state.turns?.find((t) => t.role === 'ai');
     if (!firstAiTurn?.content?.trim()) return;
 
     hasRunStartPromptRef.current = true;
 
-    const instructionsText =
-      "Welcome to Intervion. Your interviewer will introduce themselves in a moment. You will be asked to share your screen — please choose your window or entire screen when prompted. Do not use external help during the interview. Keep your camera and mic on. Your mic will turn on automatically after each question so you can answer. Let's begin.";
-
     const runVoiceIntro = async () => {
       if (!window.speechSynthesis) {
         speakText(firstAiTurn.content.trim(), interviewLang);
-        setTimeout(handleStartScreenShare, 1500);
         setTimeout(() => startAutoListeningWindow(), 500);
         return;
       }
@@ -402,72 +437,25 @@ export default function LiveInterviewPage() {
 
       return new Promise<void>((resolve) => {
         window.speechSynthesis.cancel();
-        const instructionUtterance = new SpeechSynthesisUtterance(instructionsText);
-        instructionUtterance.voice = voice;
-        instructionUtterance.lang = lang;
-        instructionUtterance.rate = 0.96;
-        instructionUtterance.pitch = 1.03;
-        instructionUtterance.onend = () => {
-          const firstQuestionUtterance = new SpeechSynthesisUtterance(firstAiTurn.content.trim());
-          firstQuestionUtterance.voice = voice;
-          firstQuestionUtterance.lang = lang;
-          firstQuestionUtterance.rate = 0.96;
-          firstQuestionUtterance.pitch = 1.03;
-          firstQuestionUtterance.onend = () => {
-            startAutoListeningWindow();
-            setTimeout(handleStartScreenShare, 1800);
-            resolve();
-          };
-          firstQuestionUtterance.onerror = () => {
-            startAutoListeningWindow();
-            setTimeout(handleStartScreenShare, 1800);
-            resolve();
-          };
-          window.speechSynthesis.speak(firstQuestionUtterance);
+        const firstQuestionUtterance = new SpeechSynthesisUtterance(firstAiTurn.content.trim());
+        if (voice) firstQuestionUtterance.voice = voice;
+        firstQuestionUtterance.lang = lang;
+        firstQuestionUtterance.rate = 0.96;
+        firstQuestionUtterance.pitch = 1.03;
+        firstQuestionUtterance.onend = () => {
+          startAutoListeningWindow();
+          resolve();
         };
-        instructionUtterance.onerror = () => resolve();
-        window.speechSynthesis.speak(instructionUtterance);
+        firstQuestionUtterance.onerror = () => {
+          startAutoListeningWindow();
+          resolve();
+        };
+        window.speechSynthesis.speak(firstQuestionUtterance);
       });
     };
 
     void runVoiceIntro();
-  }, [state, report, handleStartScreenShare, speakText, interviewLang, startAutoListeningWindow]);
-
-  // Called by HeyGenAvatar when its WebRTC session is established and the avatar is ready to speak.
-  // From this point forward, HeyGen speaks AI turns (browser TTS is disabled via heyGenReady).
-  const handleHeyGenReady = useCallback(() => {
-    // Cancel any ongoing browser TTS (welcome intro or ongoing question)
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    // Mark current last AI turn as already-spoken so HeyGen doesn't re-read it
-    const currentLastAi = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
-    heyGenLastSpokenRef.current = currentLastAi?.id ?? null;
-    setHeyGenReady(true);
-  }, [state?.turns]);
-
-  const handleHeyGenSpeakStart = useCallback(() => {
-    clearAutoListenTimeout();
-    autoListeningRef.current = false;
-    noSpeechRetryRef.current = 0;
-    audioRecorderRef.current?.stop();
-  }, [clearAutoListenTimeout]);
-
-  const handleHeyGenSpeakEnd = useCallback(() => {
-    noSpeechRetryRef.current = 0;
-    setTimeout(() => {
-      if (!loading && voiceEnabled) startAutoListeningWindow();
-    }, 220);
-  }, [loading, voiceEnabled, startAutoListeningWindow]);
-
-  // Watch for new AI turns and speak them through the HeyGen real-person avatar
-  useEffect(() => {
-    if (!heyGenReady || !state?.turns) return;
-    const lastAiTurn = [...state.turns].reverse().find((t) => t.role === 'ai');
-    if (!lastAiTurn || lastAiTurn.id === heyGenLastSpokenRef.current) return;
-    heyGenLastSpokenRef.current = lastAiTurn.id;
-    void heyGenAvatarRef.current?.speak(lastAiTurn.content);
-  }, [state?.turns, heyGenReady]);
+  }, [state, report, speakText, interviewLang, startAutoListeningWindow, roomPhase]);
 
   useEffect(() => {
     return () => {
@@ -592,7 +580,7 @@ export default function LiveInterviewPage() {
     );
   }
 
-  if (!state && !report) {
+  if (!state) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-dark">
         <div className="text-center">
@@ -604,33 +592,68 @@ export default function LiveInterviewPage() {
     );
   }
 
-  const lastAiTurn = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
-  const lastCandidateTurn = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'candidate');
+  const lastAiTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
+  const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
   const currentQuestion = lastAiTurn?.content ?? 'Preparing your next question...';
   const codingTurnActive = Boolean(
     lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
   );
-  const roleStr = state?.role != null ? String(state.role).toLowerCase() : '';
+  const roleStr = state.role != null ? String(state.role).toLowerCase() : '';
   const isTechnical = roleStr === 'technical' || /technical/.test(roleStr);
-  const firstAiContent = state?.turns?.find((t) => t.role === 'ai')?.content ?? '';
+  const firstAiContent = state.turns?.find((t) => t.role === 'ai')?.content ?? '';
   const contentSuggestsTechnical = /technical/i.test(firstAiContent);
   /** Technical interviews: show Code tab from the start. Non-technical: show Notepad tab unless user opened code panel. */
-  const showCodeTab = Boolean(state && (isTechnical || codingTurnActive || contentSuggestsTechnical || codePanelRequested));
-  const showNotepadTab = Boolean(state && !showCodeTab);
-  const interviewerDisplayName = isTechnical ? 'Ethan (Intervion AI)' : 'ZaraAlex (Intervion AI)';
+  const showCodeTab = Boolean(isTechnical || codingTurnActive || contentSuggestsTechnical || codePanelRequested);
+  const showNotepadTab = Boolean(!showCodeTab);
+  /** Recruiter default is Ethan; `zara` only when explicitly set on the schedule. */
+  const interviewerPersona = state.interviewerPersona === 'zara' ? 'zara' : 'ethan';
+  const interviewerDisplayName =
+    interviewerPersona === 'zara' ? 'ZaraAlex (Intervion AI)' : 'Ethan (Intervion AI)';
+  const interviewerFirstName = interviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan';
+  const interviewerInitial = interviewerPersona === 'zara' ? 'Z' : 'E';
   /** Always show Interview + (Code or Notepad) tab bar when we have interview state. */
-  const showTabBar = Boolean(state);
+  const showTabBar = true;
   /** When true, use 50/50 split: left = interview, right = code editor + terminal. */
-  const codePanelOpen = (showCodeTab && activeTab === 'code') || (codingTurnActive && !showCodeTab);
+  const codePanelOpen = Boolean(showCodeTab && activeTab === 'code');
 
-  const elapsedSeconds = state?.startedAt
+  if (roomPhase === 'device-check') {
+    return (
+      <InterviewDeviceCheck
+        onNext={advanceFromDeviceCheck}
+        cameraOn={cameraOn}
+        onCameraOnChange={setCameraOn}
+        cameraVideoRef={cameraVideoRef}
+        onVideoReady={onCameraVideoReady}
+      />
+    );
+  }
+
+  if (roomPhase === 'instructions') {
+    return (
+      <InterviewInstructionsOverlay
+        showCodeTab={showCodeTab}
+        codingTurnActive={codingTurnActive}
+        showNotepadTab={showNotepadTab}
+        interviewLang={interviewLang}
+        onShareScreen={handleStartScreenShare}
+        onSoundsGood={enterLiveRoom}
+      />
+    );
+  }
+
+  const elapsedSeconds = state.startedAt
     ? Math.max(0, Math.floor((nowTs - new Date(state.startedAt).getTime()) / 1000))
     : 0;
   const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
   const seconds = String(elapsedSeconds % 60).padStart(2, '0');
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[var(--surface-light)] text-[var(--surface-light-fg)]">
+    <motion.div
+      className="fixed inset-0 flex flex-col bg-[var(--surface-light)] text-[var(--surface-light-fg)]"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+    >
       <header className="shrink-0 flex flex-col gap-3 border-b border-[var(--surface-light-border)] bg-[var(--surface-light)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex shrink-0 items-center gap-2">
@@ -700,63 +723,29 @@ export default function LiveInterviewPage() {
         </div>
       </header>
 
-      {showNotesAlert && (
-        <div className="mx-6 mt-2 flex items-start justify-between gap-4 rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-4 py-3 text-sm">
-          <div className="text-[var(--surface-light-fg)]">
-            <p className="font-semibold text-[var(--accent)] mb-1">Interview notes</p>
-            <ul className="list-none space-y-0.5 text-[var(--surface-light-muted)]">
-              <li>• Share your screen when the browser asks — choose window or entire screen.</li>
-              <li>• Do not use external AI, search, or other assistance.</li>
-              {showCodeTab && !codingTurnActive && (
-                <li>• <strong>Code tab:</strong> For coding questions, click <strong>Code</strong> in the header to open the editor and submit your solution.</li>
-              )}
-              {codingTurnActive && (
-                <li>• <strong>Code tab is now active:</strong> A code editor and terminal have opened automatically — write, run, and submit your solution there.</li>
-              )}
-              {showNotepadTab && !codingTurnActive && (
-                <li>• <strong>Notepad tab:</strong> Your notes are saved on your device only. Use it to jot down points during the interview.</li>
-              )}
-              {!showCodeTab && !codingTurnActive && (
-                <li>• <strong>Coding question:</strong> If a coding problem is scheduled as the last question, a code editor and terminal will open automatically when it is asked.</li>
-              )}
-              <li>• Your mic turns on automatically after each question so you can answer.</li>
-              <li>• You can stop screen share anytime via &quot;Stop sharing&quot; or the control bar.</li>
-            </ul>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowNotesAlert(false)}
-            className="shrink-0 rounded-lg border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-1.5 text-xs font-medium text-[var(--surface-light-fg)] hover:bg-[var(--surface-light-muted)]"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
       <div className="relative min-h-0 flex-1 px-4 pb-24 pt-2 sm:px-6">
         {codePanelOpen ? (
           <div className="flex h-full w-full flex-row gap-3 sm:gap-4">
             {/* Left half — interview: camera, screen share, current question (narrow cards) */}
             <div className="flex min-w-0 flex-1 flex-col items-center overflow-hidden">
-              <div className="w-full max-w-[280px] sm:max-w-[300px] flex flex-col gap-4">
+              <div className="w-full max-w-[320px] sm:max-w-[380px] flex flex-col gap-4">
               <div className="flex shrink-0 items-center justify-center py-2">
                 {lastAiTurn?.avatarVideo ? (
                   <AIAvatar
                     videoUrl={lastAiTurn.avatarVideo}
-                    name={interviewerDisplayName.split(' ')[0]}
+                    name={interviewerFirstName}
                     subtitle="Intervion AI"
                     size="sm"
+                    presentation="orb"
+                    initialLetter={interviewerInitial}
                   />
                 ) : (
-                  <HeyGenAvatar
-                    ref={heyGenAvatarRef}
-                    name={interviewerDisplayName.split(' ')[0]}
+                  <AIAvatar
+                    name={interviewerFirstName}
                     subtitle="Intervion AI"
-                    avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
                     size="sm"
-                    onReady={handleHeyGenReady}
-                    onSpeakStart={handleHeyGenSpeakStart}
-                    onSpeakEnd={handleHeyGenSpeakEnd}
+                    presentation="orb"
+                    initialLetter={interviewerInitial}
                   />
                 )}
               </div>
@@ -782,30 +771,26 @@ export default function LiveInterviewPage() {
                   <div className="border-b border-[var(--surface-light-border)] px-3 py-2 text-xs font-medium text-[var(--surface-light-muted)]">
                     Your camera
                   </div>
-                  <div className="h-[140px] sm:h-[160px] bg-[var(--background)]">
+                  <div className="relative h-[180px] sm:h-[210px] bg-[var(--background)]">
                     <VideoPreview
                       compact
+                      compactLayout="fill"
                       active={cameraOn}
                       onActiveChange={setCameraOn}
                       micMuted={!micOn}
                       videoRef={cameraVideoRef}
+                      onVideoReady={onCameraVideoReady}
                     />
                   </div>
                 </div>
                 {cameraOn && (
-                  <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 shadow-sm">
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--surface-light-muted)]">Live analysis</p>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${faceAnalysis.faceDetected ? 'bg-[var(--success-text)]' : 'bg-[var(--surface-light-muted)]'}`} />
-                        <span>{faceAnalysis.faceDetected ? 'Face detected' : 'No face'}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[var(--surface-light-muted)]">Emotion:</span>
-                        <span className="capitalize">{emotionLabel(faceAnalysis.emotion)}</span>
-                      </div>
-                    </div>
-                  </div>
+                  <LiveAnalysisBlock
+                    faceAnalysis={faceAnalysis}
+                    modelsLoaded={modelsLoaded}
+                    loadError={loadError}
+                    waveMessageShown={waveMessageShown}
+                    compact
+                  />
                 )}
                 <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2.5 shadow-sm overflow-hidden">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
@@ -867,26 +852,32 @@ export default function LiveInterviewPage() {
           </div>
         ) : (
           <>
-            <div className="absolute inset-0 flex items-center justify-center">
-              {lastAiTurn?.avatarVideo ? (
-                <AIAvatar
-                  videoUrl={lastAiTurn.avatarVideo}
-                  name={interviewerDisplayName.split(' ')[0]}
-                  subtitle="Intervion AI"
-                  size="lg"
-                />
-              ) : (
-                <HeyGenAvatar
-                  ref={heyGenAvatarRef}
-                  name={interviewerDisplayName.split(' ')[0]}
-                  subtitle="Intervion AI"
-                  avatarId={isTechnical ? 'Wayne_20240711' : 'Anna_public_3_20240108'}
-                  size="lg"
-                  onReady={handleHeyGenReady}
-                  onSpeakStart={handleHeyGenSpeakStart}
-                  onSpeakEnd={handleHeyGenSpeakEnd}
-                />
-              )}
+            <div ref={avatarDragBoundsRef} className="absolute inset-0 overflow-hidden">
+              <DraggableAvatarPanel
+                storageKey={id ? `intervion_avatar_pos_${id}` : 'intervion_avatar_pos'}
+                dragBoundsRef={avatarDragBoundsRef}
+              >
+                <div className="flex h-full min-h-[280px] w-full items-center justify-center px-4">
+                  {lastAiTurn?.avatarVideo ? (
+                    <AIAvatar
+                      videoUrl={lastAiTurn.avatarVideo}
+                      name={interviewerFirstName}
+                      subtitle="Intervion AI"
+                      size="lg"
+                      presentation="orb"
+                      initialLetter={interviewerInitial}
+                    />
+                  ) : (
+                    <AIAvatar
+                      name={interviewerFirstName}
+                      subtitle="Intervion AI"
+                      size="lg"
+                      presentation="orb"
+                      initialLetter={interviewerInitial}
+                    />
+                  )}
+                </div>
+              </DraggableAvatarPanel>
             </div>
 
             {screenStream && (
@@ -907,48 +898,30 @@ export default function LiveInterviewPage() {
               </div>
             )}
 
-            <div className="absolute bottom-8 left-6 w-[260px] sm:w-[280px] space-y-2">
-          <div className="overflow-hidden rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] shadow-lg backdrop-blur">
+            <div className="absolute bottom-8 left-6 w-[min(92vw,380px)] min-w-[280px] space-y-2 sm:min-w-[300px]">
+          <div className="overflow-hidden rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] shadow-xl backdrop-blur-md ring-1 ring-black/5">
             <div className="border-b border-[var(--surface-light-border)] px-3 py-2 text-xs font-medium text-[var(--surface-light-muted)]">
               Your camera
             </div>
-            <div className="h-[160px] sm:h-[180px] bg-[var(--background)]">
+            <div className="relative h-[200px] sm:h-[240px] bg-[var(--background)]">
               <VideoPreview
                 compact
+                compactLayout="fill"
                 active={cameraOn}
                 onActiveChange={setCameraOn}
                 micMuted={!micOn}
                 videoRef={cameraVideoRef}
+                onVideoReady={onCameraVideoReady}
               />
             </div>
           </div>
           {cameraOn && (
-            <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2.5 shadow-sm">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--surface-light-muted)]">
-                Live analysis
-              </p>
-              <div className="space-y-1.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${faceAnalysis.faceDetected ? 'bg-[var(--success-text)]' : 'bg-[var(--surface-light-muted)]'}`} />
-                  <span className="text-[var(--surface-light-fg)]">{faceAnalysis.faceDetected ? 'Face detected' : 'No face'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--surface-light-muted)]">Emotion:</span>
-                  <span className="capitalize text-[var(--surface-light-fg)]">{emotionLabel(faceAnalysis.emotion)}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[var(--surface-light-muted)]">Lips:</span>
-                  <span className="text-[var(--surface-light-fg)]">
-                    {faceAnalysis.lipOpenness > 0.2 ? 'Active (speaking)' : 'Closed'}
-                  </span>
-                </div>
-                {waveMessageShown && (
-                  <p className="flex items-center gap-1.5 rounded-lg bg-[var(--accent-muted)] px-2 py-1.5 font-medium text-[var(--accent)]">
-                    <span>👋</span> Wave detected — Hello!
-                  </p>
-                )}
-              </div>
-            </div>
+            <LiveAnalysisBlock
+              faceAnalysis={faceAnalysis}
+              modelsLoaded={modelsLoaded}
+              loadError={loadError}
+              waveMessageShown={waveMessageShown}
+            />
           )}
         </div>
 
@@ -1140,13 +1113,18 @@ export default function LiveInterviewPage() {
           <button
             type="button"
             onClick={() => {
+              if (codePanelOpen) {
+                setActiveTab('interview');
+                if (!codingTurnActive) setCodePanelRequested(false);
+                return;
+              }
               setCodePanelRequested(true);
               setActiveTab('code');
             }}
             className={`flex h-10 w-10 items-center justify-center rounded-full text-white transition ${
-              activeTab === 'code' ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]' : 'bg-[var(--surface-light-muted)] hover:opacity-90'
+              codePanelOpen ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]' : 'bg-[var(--surface-light-muted)] hover:opacity-90'
             } disabled:opacity-50`}
-            title="Open code editor & terminal"
+            title={codePanelOpen ? 'Hide code editor' : 'Open code editor & terminal'}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
@@ -1192,6 +1170,6 @@ export default function LiveInterviewPage() {
           hideButton
         />
       </div>
-    </div>
+    </motion.div>
   );
 }

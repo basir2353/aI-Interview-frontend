@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
+import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type RecruiterApplication, type RecruiterCustomQuestionInput } from '@/lib/api';
-import type { InterviewRole } from '@/types';
+import type { InterviewRole, InterviewerPersona } from '@/types';
 
 function getTomorrowDate(): string {
   const d = new Date();
@@ -31,16 +32,24 @@ const roleOptions: Array<{ value: InterviewRole; label: string }> = [
 const difficultyOptions = ['easy', 'medium', 'hard'] as const;
 type Difficulty = (typeof difficultyOptions)[number];
 
+const INTERVIEWER_OPTIONS: { value: InterviewerPersona; label: string }[] = [
+  { value: 'ethan', label: 'Ethan (default)' },
+  { value: 'zara', label: 'ZaraAlex' },
+];
+
 export default function RecruiterSchedulePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const applicationId = searchParams.get('applicationId') ?? '';
 
   const [loading, setLoading] = useState(true);
+  const [pickerLoading, setPickerLoading] = useState(() => !applicationId);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [createdJoinUrl, setCreatedJoinUrl] = useState('');
   const [application, setApplication] = useState<RecruiterApplication | null>(null);
+  /** When URL has no applicationId, we load these so the recruiter can pick who to schedule. */
+  const [pickerApplications, setPickerApplications] = useState<RecruiterApplication[]>([]);
 
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('10:00');
@@ -54,6 +63,7 @@ export default function RecruiterSchedulePage() {
   const [codingLanguage, setCodingLanguage] = useState('javascript');
   const [starterCode, setStarterCode] = useState('');
   const [candidateMessage, setCandidateMessage] = useState('');
+  const [interviewerPersona, setInterviewerPersona] = useState<InterviewerPersona>('ethan');
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('recruiterToken') : null;
@@ -62,13 +72,35 @@ export default function RecruiterSchedulePage() {
       return;
     }
     if (!applicationId) {
-      setError('Missing application id. Please open this page from the applicants list.');
+      setError('');
+      setApplication(null);
+      setPickerLoading(true);
       setLoading(false);
+      api
+        .recruiterMe()
+        .then((meRes) => {
+          setInterviewerPersona(meRes.recruiter.interviewerPersona ?? 'ethan');
+          return api.recruiterGetApplications();
+        })
+        .then((appsRes) => {
+          setPickerApplications(
+            appsRes.applications.filter((item) => String(item.status).toLowerCase() !== 'rejected')
+          );
+        })
+        .catch((e) => {
+          const message = e instanceof Error ? e.message : 'Failed to load applicants';
+          setError(message);
+          setPickerApplications([]);
+        })
+        .finally(() => setPickerLoading(false));
       return;
     }
 
+    setPickerLoading(false);
+    setLoading(true);
     Promise.all([api.recruiterMe(), api.recruiterGetApplications()])
-      .then(([, appsRes]) => {
+      .then(([meRes, appsRes]) => {
+        setInterviewerPersona(meRes.recruiter.interviewerPersona ?? 'ethan');
         const app = appsRes.applications.find((item) => item.id === applicationId) ?? null;
         if (!app) {
           setError('Application not found or you no longer have access.');
@@ -128,6 +160,7 @@ export default function RecruiterSchedulePage() {
         message: messageParts.join('\n\n'),
         focusAreas: focusAreas.trim() || undefined,
         durationMinutes: durationMinutes.trim() ? parseInt(durationMinutes, 10) : undefined,
+        interviewerPersona,
       });
       setCreatedJoinUrl(created.joinUrl);
     } catch (e) {
@@ -139,13 +172,18 @@ export default function RecruiterSchedulePage() {
 
   return (
     <AppShell
-      title="Schedule Interview"
-      subtitle="Configure interview details and questions"
+      title="Schedule interview"
+      subtitle={
+        applicationId
+          ? 'Configure time, questions, and optional coding task for this applicant.'
+          : 'Pick an applicant below, or open one from the applicants list — the URL will include their application id.'
+      }
       backHref="/recruiter/applicants"
       backLabel="Applicants"
       theme="light"
     >
       <div className="space-y-6">
+        <RecruiterSubnav />
         {error && <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm font-medium text-[var(--error-text)]">{error}</p>}
         {createdJoinUrl && (
           <Card className="rounded-2xl border-[var(--success-border)] bg-[var(--success-bg)] p-5">
@@ -163,7 +201,59 @@ export default function RecruiterSchedulePage() {
         )}
 
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-5 shadow-sm">
-          {loading ? (
+          {!applicationId && pickerLoading ? (
+            <p className="text-sm font-medium text-[var(--surface-light-muted)]">Loading applicants you can schedule…</p>
+          ) : !applicationId ? (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent-muted)] px-4 py-3 text-sm text-[var(--surface-light-fg)]">
+                <p className="font-semibold text-[var(--accent)]">Schedule from an application</p>
+                <p className="mt-1 text-[var(--surface-light-muted)]">
+                  Interviews tied to a job application need a candidate selected. Choose someone below or use{' '}
+                  <Link href="/recruiter/applicants" className="font-semibold text-[var(--accent)] underline hover:no-underline">
+                    Applicants
+                  </Link>{' '}
+                  and click <strong>Schedule interview</strong> on their row.
+                </p>
+              </div>
+              {pickerApplications.length === 0 ? (
+                <p className="text-sm text-[var(--surface-light-muted)]">
+                  No eligible applications yet. Post a job on{' '}
+                  <Link href="/recruiter/jobs" className="font-semibold text-[var(--accent)] hover:underline">
+                    Jobs &amp; applications
+                  </Link>{' '}
+                  or schedule a{' '}
+                  <Link href="/recruiter#recruiter-create" className="font-semibold text-[var(--accent)] hover:underline">
+                    direct interview (no application)
+                  </Link>{' '}
+                  from the dashboard.
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--surface-light-border)] rounded-xl border border-[var(--surface-light-border)] overflow-hidden">
+                  {pickerApplications.map((app) => (
+                    <li
+                      key={app.id}
+                      className="flex flex-col gap-3 bg-[var(--surface-light-card)] p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[var(--surface-light-fg)]">{app.candidate_name || 'Candidate'}</p>
+                        <p className="truncate text-sm text-[var(--surface-light-muted)]">{app.candidate_email}</p>
+                        <p className="mt-1 text-sm text-[var(--surface-light-fg)]">
+                          {app.position_title} <span className="text-[var(--surface-light-muted)]">· {app.position_role}</span>
+                        </p>
+                        <p className="mt-0.5 text-xs capitalize text-[var(--surface-light-muted)]">{String(app.status).replace(/_/g, ' ')}</p>
+                      </div>
+                      <Link
+                        href={`/recruiter/schedule?applicationId=${encodeURIComponent(app.id)}`}
+                        className="shrink-0 rounded-xl bg-[var(--accent)] px-4 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90"
+                      >
+                        Schedule this applicant
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : loading ? (
             <p className="text-sm font-medium text-[var(--surface-light-muted)]">Loading application…</p>
           ) : application ? (
             <>
@@ -240,6 +330,26 @@ export default function RecruiterSchedulePage() {
                     </option>
                   ))}
                 </select>
+                <div className="md:col-span-2 flex flex-col gap-1">
+                  <label className="text-xs font-medium text-[var(--surface-light-muted)]">AI interviewer for this slot</label>
+                  <select
+                    value={interviewerPersona}
+                    onChange={(e) => setInterviewerPersona(e.target.value as InterviewerPersona)}
+                    className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
+                  >
+                    {INTERVIEWER_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[var(--surface-light-muted)]">
+                    Defaults from your profile (Ethan if unset).{' '}
+                    <Link href="/recruiter/interviewer-settings" className="font-semibold text-[var(--accent)] hover:underline">
+                      Change default &amp; company name
+                    </Link>
+                  </p>
+                </div>
                 <input
                   type="text"
                   value={focusAreas}
@@ -341,7 +451,13 @@ export default function RecruiterSchedulePage() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-[var(--surface-light-muted)]">Select an application from the applicants page to schedule an interview.</p>
+            <p className="text-sm text-[var(--surface-light-muted)]">
+              This application could not be loaded. Return to{' '}
+              <Link href="/recruiter/applicants" className="font-semibold text-[var(--accent)] hover:underline">
+                Applicants
+              </Link>
+              .
+            </p>
           )}
         </Card>
       </div>

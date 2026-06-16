@@ -24,12 +24,18 @@ export function AdminShell({ children, title, description, actions }: AdminShell
 
   useEffect(() => {
     api.adminMe().then((me) => {
-      if (me.permissionLevel === 'limited') {
-        setNavItems(adminNavItems.filter((item) => !LIMITED_ADMIN_HIDDEN_HREFS.includes(item.href)));
-      } else {
-        setNavItems(adminNavItems);
-      }
-    }).catch(() => setNavItems(adminNavItems));
+      const isLimited = me.permissionLevel === 'limited';
+      const isSuper = me.isSuperAdmin === true;
+      setNavItems(
+        adminNavItems.filter((item) => {
+          if (item.superAdminOnly && !isSuper) return false;
+          if (isLimited && LIMITED_ADMIN_HIDDEN_HREFS.includes(item.href)) return false;
+          return true;
+        })
+      );
+    }).catch(() =>
+      setNavItems(adminNavItems.filter((item) => !item.superAdminOnly))
+    );
   }, []);
 
   const isActive = (href: string) => {

@@ -19,7 +19,7 @@ import { AIAvatar } from '@/components/AIAvatar';
 
 /** Exposed via ref so the parent can call speak() */
 export interface HeyGenAvatarHandle {
-  speak: (text: string) => Promise<void>;
+  speak: (text: string) => Promise<boolean>;
   interrupt: () => Promise<void>;
 }
 
@@ -60,6 +60,7 @@ const HeyGenAvatarInner = (
   const avatarRef = useRef<StreamingAvatar | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [errorMsg, setErrorMsg] = useState('');
+  const statusRef = useRef<Status>('loading');
   const onReadyRef = useRef(onReady);
   const onSpeakStartRef = useRef(onSpeakStart);
   const onSpeakEndRef = useRef(onSpeakEnd);
@@ -67,18 +68,22 @@ const HeyGenAvatarInner = (
   useEffect(() => { onReadyRef.current = onReady; }, [onReady]);
   useEffect(() => { onSpeakStartRef.current = onSpeakStart; }, [onSpeakStart]);
   useEffect(() => { onSpeakEndRef.current = onSpeakEnd; }, [onSpeakEnd]);
+  useEffect(() => { statusRef.current = status; }, [status]);
 
   useImperativeHandle(ref, () => ({
     speak: async (text: string) => {
-      if (!avatarRef.current || (status !== 'ready' && status !== 'speaking')) return;
+      if (!avatarRef.current || (statusRef.current !== 'ready' && statusRef.current !== 'speaking')) {
+        return false;
+      }
       try {
         await avatarRef.current.speak({
           text,
           taskType: TaskType.REPEAT,
           taskMode: TaskMode.SYNC,
         });
+        return true;
       } catch {
-        // ignore transient speak errors
+        return false;
       }
     },
     interrupt: async () => {

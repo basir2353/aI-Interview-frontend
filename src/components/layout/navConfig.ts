@@ -3,10 +3,11 @@
  * Used by SiteHeader (global navbar) and AppShell.
  */
 
-export type NavItem = { href: string; label: string; primary?: boolean };
+export type NavItem = { href: string; label: string; primary?: boolean; superAdminOnly?: boolean };
 
 export const recruiterNavItems: NavItem[] = [
   { href: '/recruiter', label: 'Dashboard' },
+  { href: '/recruiter/interviewer-settings', label: 'AI interviewer' },
   { href: '/community', label: 'Community' },
   { href: '/recruiter/applicants', label: 'Applicants' },
   { href: '/recruiter/jobs', label: 'Jobs & applications' },
@@ -30,6 +31,7 @@ export const adminNavItems: NavItem[] = [
   { href: '/admin/schedules', label: 'Schedules' },
   { href: '/admin/applications', label: 'Applications & CVs' },
   { href: '/admin/questions', label: 'Question bank' },
+  { href: '/admin/interview-layout', label: 'Interview screen (UI)', superAdminOnly: true },
 ];
 
 export const publicNavItems: NavItem[] = [

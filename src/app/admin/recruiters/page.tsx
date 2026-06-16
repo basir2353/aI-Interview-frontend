@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, type AdminRecruiterRow } from '@/lib/api';
+import { api, type AdminRecruiterRow, type AdminRow } from '@/lib/api';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -14,10 +14,14 @@ export default function AdminRecruitersPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [recruiters, setRecruiters] = useState<AdminRecruiterRow[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [managingAdmins, setManagingAdmins] = useState<AdminRow[]>([]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  /** Super admin only: which admin "owns" this new recruiter (optional). Sub-admins always assign themselves on the server. */
+  const [createManagedByAdminId, setCreateManagedByAdminId] = useState('');
 
   const [passwordEditId, setPasswordEditId] = useState<string | null>(null);
   const [passwordEditName, setPasswordEditName] = useState('');
@@ -38,7 +42,20 @@ export default function AdminRecruitersPage() {
       router.replace('/admin/login');
       return;
     }
-    load()
+    api
+      .adminMe()
+      .then(async (me) => {
+        setIsSuperAdmin(me.isSuperAdmin);
+        if (me.isSuperAdmin) {
+          try {
+            const { admins } = await api.adminGetAdmins();
+            setManagingAdmins(admins.filter((a) => !a.isSuperAdmin && a.id !== 'super-admin'));
+          } catch {
+            setManagingAdmins([]);
+          }
+        }
+        await load();
+      })
       .catch(() => router.replace('/admin/login'))
       .finally(() => setLoading(false));
   }, [router]);
@@ -59,10 +76,18 @@ export default function AdminRecruitersPage() {
     setError('');
     setSubmitLoading(true);
     try {
-      await api.adminCreateRecruiter({ name: name || undefined, email, password });
+      await api.adminCreateRecruiter({
+        name: name || undefined,
+        email,
+        password,
+        ...(isSuperAdmin
+          ? { managedByAdminId: createManagedByAdminId.trim() ? createManagedByAdminId.trim() : null }
+          : {}),
+      });
       setName('');
       setEmail('');
       setPassword('');
+      setCreateManagedByAdminId('');
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create recruiter');
@@ -79,6 +104,19 @@ export default function AdminRecruitersPage() {
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update access');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleManagedByChange = async (id: string, managedByAdminId: string | null) => {
+    setError('');
+    setActionLoadingId(id);
+    try {
+      await api.adminUpdateRecruiter(id, { managedByAdminId });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update managing admin');
     } finally {
       setActionLoadingId(null);
     }
@@ -154,7 +192,11 @@ export default function AdminRecruitersPage() {
   return (
     <AdminShell
       title="Recruiter management"
-      description="Create recruiter accounts and manage portal access."
+      description={
+        isSuperAdmin
+          ? 'Create recruiter accounts, assign them to an admin, and manage portal access.'
+          : 'Create recruiter accounts under your admin account and manage their portal access.'
+      }
     >
       <div className="space-y-6 sm:space-y-8">
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 shadow-sm sm:p-6">
@@ -162,34 +204,58 @@ export default function AdminRecruitersPage() {
           <p className="mt-1 text-sm font-medium text-[var(--surface-light-muted)]">
             Each recruiter can sign in and generate their own interview links.
           </p>
-          <form onSubmit={handleCreate} className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="recruiter@example.com"
-              required
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password (min 6)"
-              required
-              minLength={6}
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <Button type="submit" disabled={submitLoading} className="justify-center disabled:opacity-50 sm:col-span-2 lg:col-span-1">
-              {submitLoading ? 'Creating…' : 'Create recruiter'}
-            </Button>
+          <form onSubmit={handleCreate} className="mt-5 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Name"
+                className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+              />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="recruiter@example.com"
+                required
+                className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+              />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password (min 6)"
+                required
+                minLength={6}
+                className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+              />
+              {isSuperAdmin ? (
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <label className="mb-1 block text-xs font-semibold text-[var(--surface-light-muted)]">Registered under admin</label>
+                  <select
+                    value={createManagedByAdminId}
+                    onChange={(e) => setCreateManagedByAdminId(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+                  >
+                    <option value="">Unassigned (legacy)</option>
+                    {managingAdmins.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name || a.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              <Button type="submit" disabled={submitLoading} className="justify-center disabled:opacity-50 sm:col-span-2 lg:col-span-1">
+                {submitLoading ? 'Creating…' : 'Create recruiter'}
+              </Button>
+            </div>
+            {!isSuperAdmin && (
+              <p className="text-xs font-medium text-[var(--surface-light-muted)]">
+                New recruiters are linked to your admin account automatically.
+              </p>
+            )}
           </form>
           {error && <p className="mt-3 rounded-lg bg-[var(--error-bg)] px-4 py-2 text-sm font-medium text-[var(--error-text)]">{error}</p>}
         </Card>
@@ -200,11 +266,12 @@ export default function AdminRecruitersPage() {
             <p className="mt-0.5 text-sm font-medium text-[var(--surface-light-muted)]">{recruiters.length} account(s)</p>
           </div>
           <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[860px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">Name</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">Email</th>
+                  <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">Managing admin</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">Access</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">Responsibility</th>
                   <th className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">Created</th>
@@ -217,6 +284,29 @@ export default function AdminRecruitersPage() {
                   <tr key={r.id} className="hover:bg-[var(--accent-muted)]/60">
                     <td className="px-4 py-3 font-semibold text-[var(--surface-light-fg)] sm:px-6 sm:py-4">{r.name || '—'}</td>
                     <td className="px-4 py-3 font-medium text-[var(--surface-light-fg)] sm:px-6 sm:py-4">{r.email}</td>
+                    <td className="px-4 py-3 sm:px-6 sm:py-4">
+                      {isSuperAdmin ? (
+                        <select
+                          value={r.managed_by_admin_id ?? ''}
+                          onChange={(e) =>
+                            handleManagedByChange(r.id, e.target.value.trim() ? e.target.value : null)
+                          }
+                          disabled={actionLoadingId === r.id}
+                          className="max-w-[200px] rounded-lg border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-2 py-1.5 text-xs font-medium text-[var(--surface-light-fg)] disabled:opacity-50"
+                        >
+                          <option value="">Unassigned</option>
+                          {managingAdmins.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name || a.email}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-sm text-[var(--surface-light-fg)]">
+                          {r.managed_by_name || r.managed_by_email || '—'}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 sm:px-6 sm:py-4">
                       <span
                         className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${

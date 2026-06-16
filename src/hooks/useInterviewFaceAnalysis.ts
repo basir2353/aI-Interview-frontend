@@ -29,6 +29,8 @@ export interface FaceAnalysisState {
   lipOpenness: number;
   /** Derived from blendshapes or landmarks */
   emotion: EmotionLabel;
+  /** 0–100 heuristic: expressiveness / engagement from blendshapes */
+  confidence: number;
   /** Open_Palm or similar = wave / hello */
   waveDetected: boolean;
   /** Raw gesture name if any */
@@ -41,6 +43,7 @@ const DEFAULT_STATE: FaceAnalysisState = {
   faceDetected: false,
   lipOpenness: 0,
   emotion: 'neutral',
+  confidence: 0,
   waveDetected: false,
   gestureName: null,
   blendshapeScores: {},
@@ -53,19 +56,46 @@ function distance(
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
+/** MediaPipe FaceLandmarker uses ARKit-style blendshape names (mouthSmileLeft/Right, jawOpen, …). */
 function emotionFromBlendshapes(scores: Record<string, number>): EmotionLabel {
-  const smile = scores['mouthSmile'] ?? 0;
-  const mouthOpen = scores['mouthOpen'] ?? 0;
+  const smile = Math.max(
+    scores['mouthSmileLeft'] ?? 0,
+    scores['mouthSmileRight'] ?? 0,
+    scores['mouthSmile'] ?? 0
+  );
+  const mouthOpen = Math.max(
+    scores['jawOpen'] ?? 0,
+    scores['mouthFunnel'] ?? 0,
+    scores['mouthOpen'] ?? 0
+  );
   const browInnerUp = scores['browInnerUp'] ?? 0;
-  const eyeWide = scores['eyeWide'] ?? 0;
-  const browDown = scores['browDown_L'] ?? 0;
+  const eyeWide = Math.max(
+    scores['eyeWideLeft'] ?? 0,
+    scores['eyeWideRight'] ?? 0,
+    scores['eyeWide'] ?? 0
+  );
+  const browDown = Math.max(
+    scores['browDownLeft'] ?? 0,
+    scores['browDownRight'] ?? 0,
+    scores['browDown_L'] ?? 0
+  );
 
-  if (mouthOpen > 0.25) return 'speaking';
-  if (smile > 0.4) return 'smiling';
-  if (browInnerUp > 0.3 && eyeWide > 0.2) return 'surprised';
-  if (browDown > 0.2) return 'concentrating';
-  if (browInnerUp > 0.15) return 'thinking';
+  if (mouthOpen > 0.22) return 'speaking';
+  if (smile > 0.35) return 'smiling';
+  if (browInnerUp > 0.28 && eyeWide > 0.18) return 'surprised';
+  if (browDown > 0.18) return 'concentrating';
+  if (browInnerUp > 0.12) return 'thinking';
   return 'neutral';
+}
+
+function confidenceFromBlendshapes(scores: Record<string, number>, faceDetected: boolean): number {
+  if (!faceDetected) return 0;
+  const vals = Object.values(scores);
+  if (vals.length === 0) return 55;
+  const peak = Math.max(...vals);
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const engagement = peak * 0.55 + mean * 0.45;
+  return Math.round(Math.min(100, Math.max(28, engagement * 100)));
 }
 
 export interface UseInterviewFaceAnalysisOptions {
@@ -75,6 +105,14 @@ export interface UseInterviewFaceAnalysisOptions {
   onWaveDetected?: () => void;
   /** Analysis interval ms */
   intervalMs?: number;
+  /** Bump when camera stream is ready (e.g. after VideoPreview play/loadeddata) so the loop attaches after the video element has frames. */
+  videoReadyTick?: number;
+}
+
+export interface InterviewFaceAnalysisResult {
+  faceAnalysis: FaceAnalysisState;
+  modelsLoaded: boolean;
+  loadError: string | null;
 }
 
 export function useInterviewFaceAnalysis({
@@ -82,9 +120,11 @@ export function useInterviewFaceAnalysis({
   enabled,
   onWaveDetected,
   intervalMs = 120,
-}: UseInterviewFaceAnalysisOptions) {
+  videoReadyTick = 0,
+}: UseInterviewFaceAnalysisOptions): InterviewFaceAnalysisResult {
   const [state, setState] = useState<FaceAnalysisState>(DEFAULT_STATE);
   const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
   const gestureRecognizerRef = useRef<GestureRecognizer | null>(null);
   const loadedRef = useRef(false);
@@ -101,6 +141,7 @@ export function useInterviewFaceAnalysis({
 
     (async () => {
       try {
+        setLoadError(null);
         const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
         if (cancelled) return;
 
@@ -123,7 +164,9 @@ export function useInterviewFaceAnalysis({
         loadedRef.current = true;
         setModelsLoaded(true);
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
         console.warn('[useInterviewFaceAnalysis] Failed to load models:', e);
+        setLoadError(msg);
       }
     })();
 
@@ -181,15 +224,18 @@ export function useInterviewFaceAnalysis({
               lipOpenness = Math.min(1, d * 8);
             }
           }
-          if (faceResult.faceBlendshapes?.length) {
-            for (const c of faceResult.faceBlendshapes) {
-              for (const cat of c.categories) {
-                blendshapeScores[cat.categoryName] = cat.score;
-              }
+          const firstBlend = faceResult.faceBlendshapes?.[0];
+          if (firstBlend?.categories?.length) {
+            for (const cat of firstBlend.categories) {
+              blendshapeScores[cat.categoryName] = cat.score;
             }
             emotion = emotionFromBlendshapes(blendshapeScores);
-            const mouthOpen = blendshapeScores['mouthOpen'];
-            if (mouthOpen != null) lipOpenness = Math.max(lipOpenness, mouthOpen);
+            const mouthOpen = Math.max(
+              blendshapeScores['jawOpen'] ?? 0,
+              blendshapeScores['mouthFunnel'] ?? 0,
+              blendshapeScores['mouthOpen'] ?? 0
+            );
+            if (mouthOpen > 0) lipOpenness = Math.max(lipOpenness, mouthOpen);
           }
         }
 
@@ -212,10 +258,13 @@ export function useInterviewFaceAnalysis({
           onWaveDetectedStable.current?.();
         }
 
+        const confidence = confidenceFromBlendshapes(blendshapeScores, faceDetected);
+
         setState({
           faceDetected,
           lipOpenness,
           emotion,
+          confidence,
           waveDetected,
           gestureName,
           blendshapeScores,
@@ -232,12 +281,12 @@ export function useInterviewFaceAnalysis({
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [enabled, modelsLoaded, intervalMs, videoRef]);
+  }, [enabled, modelsLoaded, intervalMs, videoRef, videoReadyTick]);
 
   // Reset when disabled
   useEffect(() => {
     if (!enabled) setState(DEFAULT_STATE);
   }, [enabled]);
 
-  return state;
+  return { faceAnalysis: state, modelsLoaded, loadError };
 }

@@ -6,6 +6,9 @@ export type InterviewPhase = 'intro' | 'technical' | 'behavioral' | 'wrap_up' | 
 
 export type InterviewRole = 'technical' | 'behavioral' | 'sales' | 'customer_success';
 
+/** Recruiter-chosen AI presenter; default Ethan. */
+export type InterviewerPersona = 'ethan' | 'zara';
+
 export interface Turn {
   id: string;
   role: 'ai' | 'candidate';
@@ -50,6 +53,8 @@ export interface InterviewState {
   /** Recruiter-set duration in minutes */
   durationMinutes?: number;
   approximateTokens: number;
+  /** AI interviewer persona from schedule / recruiter settings */
+  interviewerPersona?: InterviewerPersona;
 }
 
 export interface ReportCompetency {

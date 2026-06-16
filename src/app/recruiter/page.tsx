@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, type AdminScheduleRow, type RecruiterApplication } from '@/lib/api';
-import type { InterviewRole } from '@/types';
+import type { InterviewRole, InterviewerPersona } from '@/types';
 import { AppShell } from '@/components/layout/AppShell';
+import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import {
@@ -103,6 +104,10 @@ export default function RecruiterDashboardPage() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceKey, setSelectedVoiceKey] = useState('');
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
+  const [recruiterCompanyName, setRecruiterCompanyName] = useState<string | null>(null);
+  const [defaultInterviewerPersona, setDefaultInterviewerPersona] = useState<InterviewerPersona>('ethan');
+  /** Per-interview override in the create form; resets from profile when the form opens. */
+  const [createInterviewerPersona, setCreateInterviewerPersona] = useState<InterviewerPersona>('ethan');
   const dateInputRef = useRef<HTMLInputElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
   const recruiterName =
@@ -117,10 +122,14 @@ export default function RecruiterDashboardPage() {
   );
 
   const load = () =>
-    Promise.all([api.recruiterGetSchedules(), api.recruiterGetApplications()]).then(([schedRes, appRes]) => {
-      setSchedules(schedRes.schedules);
-      setApplications(appRes.applications);
-    });
+    Promise.all([api.recruiterGetSchedules(), api.recruiterGetApplications(), api.recruiterMe()]).then(
+      ([schedRes, appRes, meRes]) => {
+        setSchedules(schedRes.schedules);
+        setApplications(appRes.applications);
+        setRecruiterCompanyName(meRes.recruiter.companyName ?? null);
+        setDefaultInterviewerPersona(meRes.recruiter.interviewerPersona ?? 'ethan');
+      }
+    );
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('recruiterToken') : null;
@@ -128,14 +137,17 @@ export default function RecruiterDashboardPage() {
       router.replace('/recruiter/login');
       return;
     }
-    api.recruiterMe()
-      .then(() => load())
+    load()
       .catch(() => {
         localStorage.removeItem('recruiterToken');
         router.replace('/recruiter/login');
       })
       .finally(() => setLoading(false));
   }, [router]);
+
+  useEffect(() => {
+    if (createOpen) setCreateInterviewerPersona(defaultInterviewerPersona);
+  }, [createOpen, defaultInterviewerPersona]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -223,6 +235,7 @@ export default function RecruiterDashboardPage() {
         difficulty,
         customQuestions: customQuestions.length ? customQuestions : undefined,
         codingQuestions: codingQuestions?.length ? codingQuestions : undefined,
+        interviewerPersona: createInterviewerPersona,
       });
       setCreateOpen(false);
       setCandidateEmail('');
@@ -316,6 +329,33 @@ export default function RecruiterDashboardPage() {
     } as const;
   }, []);
 
+  const upcomingSchedules = useMemo(
+    () =>
+      schedules.filter((s) =>
+        ['scheduled', 'in_progress'].includes(String(s.status ?? '').toLowerCase())
+      ),
+    [schedules]
+  );
+  const completedSchedules = useMemo(
+    () => schedules.filter((s) => String(s.status ?? '').toLowerCase() === 'completed'),
+    [schedules]
+  );
+  const scheduledCount = useMemo(
+    () => upcomingSchedules.filter((s) => String(s.status ?? '').toLowerCase() === 'scheduled').length,
+    [upcomingSchedules]
+  );
+  const inProgressCount = useMemo(
+    () => upcomingSchedules.filter((s) => String(s.status ?? '').toLowerCase() === 'in_progress').length,
+    [upcomingSchedules]
+  );
+
+  const scrollToSection = useCallback((id: string, openCreate?: boolean) => {
+    if (openCreate) setCreateOpen(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-light)]">
@@ -329,15 +369,15 @@ export default function RecruiterDashboardPage() {
 
   return (
     <AppShell
-      title="Recruiter Dashboard"
-      subtitle={recruiterName || recruiterEmail || 'Recruiter'}
+      title="Recruiter hub"
+      subtitle={`${recruiterName || recruiterEmail || 'Recruiter'} · Schedules & outcomes`}
       backHref="/"
       backLabel="Home"
       theme="light"
       actions={
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setCreateOpen((v) => !v)} size="md">
-            {createOpen ? 'Close' : 'New interview'}
+            {createOpen ? 'Close form' : 'New interview'}
           </Button>
           <Button onClick={handleLogout} variant="secondary" size="md">
             Logout
@@ -345,7 +385,120 @@ export default function RecruiterDashboardPage() {
         </div>
       }
     >
-      <div className="space-y-6 sm:space-y-10">
+      <div className="space-y-8 sm:space-y-10">
+        <RecruiterSubnav />
+
+        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-gradient-to-br from-[var(--surface-light-card)] to-[var(--accent-muted)]/30 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Interview experience</p>
+              <p className="mt-1 text-lg font-semibold text-[var(--surface-light-fg)]">
+                AI interviewer: {defaultInterviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan'}
+              </p>
+              <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">
+                {recruiterCompanyName ? (
+                  <>Company on profile: <span className="font-medium text-[var(--surface-light-fg)]">{recruiterCompanyName}</span></>
+                ) : (
+                  <>Add your company name and choose the default presenter for new schedules.</>
+                )}
+              </p>
+            </div>
+            <Link
+              href="/recruiter/interviewer-settings"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--accent-hover)]"
+            >
+              AI interviewer &amp; company
+            </Link>
+          </div>
+        </Card>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-upcoming')}
+            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Scheduled</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{scheduledCount}</p>
+            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Awaiting candidate</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-upcoming')}
+            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">In progress</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{inProgressCount}</p>
+            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Live interviews</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-applications')}
+            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Applications</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{applications.length}</p>
+            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">CVs & job matches</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-results')}
+            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Completed</p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{completedSchedules.length}</p>
+            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Reports available</p>
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-[var(--surface-light-border)] bg-[var(--accent-muted)]/40 px-4 py-3 text-sm">
+          <span className="font-semibold text-[var(--surface-light-fg)]">On this page:</span>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-create', true)}
+            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--accent)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
+          >
+            Create interview
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-upcoming')}
+            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--surface-light-fg)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
+          >
+            Upcoming
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-applications')}
+            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--surface-light-fg)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
+          >
+            Applications
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollToSection('recruiter-results')}
+            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--surface-light-fg)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
+          >
+            Results
+          </button>
+        </div>
+
+        <section id="recruiter-create" className="scroll-mt-24">
+          {!createOpen && (
+            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--surface-light-fg)]">Schedule a new interview</h2>
+                  <p className="mt-1 text-sm text-[var(--surface-light-muted)]">
+                    Generate a link, optional custom questions, and coding tasks for technical roles.
+                  </p>
+                </div>
+                <Button type="button" onClick={() => setCreateOpen(true)} size="md" className="shrink-0">
+                  Open scheduling form
+                </Button>
+              </div>
+            </Card>
+          )}
         {createOpen && (
           <Card className="relative overflow-hidden rounded-2xl p-4 sm:rounded-3xl sm:p-7">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_300px_at_30%_-20%,var(--accent-muted),transparent_55%)]" />
@@ -427,6 +580,25 @@ export default function RecruiterDashboardPage() {
                       <option value="medium">Medium</option>
                       <option value="hard">Hard</option>
                     </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-[var(--surface-light-fg)]">
+                      AI interviewer for this interview
+                    </label>
+                    <select
+                      value={createInterviewerPersona}
+                      onChange={(e) => setCreateInterviewerPersona(e.target.value as InterviewerPersona)}
+                      className={inputBase}
+                    >
+                      <option value="ethan">Ethan (default)</option>
+                      <option value="zara">ZaraAlex</option>
+                    </select>
+                    <p className="mt-1.5 text-xs font-medium text-[var(--surface-light-muted)]">
+                      Starts from your saved default when you open this form (Ethan if unset).{' '}
+                      <Link href="/recruiter/interviewer-settings" className="text-[var(--accent)] underline hover:no-underline">
+                        Company &amp; default interviewer
+                      </Link>
+                    </p>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-[var(--surface-light-fg)]">Interviewer voice</label>
@@ -615,33 +787,30 @@ export default function RecruiterDashboardPage() {
             </div>
           </Card>
         )}
+        </section>
 
+        <section id="recruiter-upcoming" className="scroll-mt-24">
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
           <div className="border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-4 sm:px-6">
-            <h3 className="font-semibold text-[var(--surface-light-fg)]">Scheduled interviews</h3>
+            <h3 className="font-semibold text-[var(--surface-light-fg)]">Upcoming &amp; live interviews</h3>
             <p className="mt-0.5 text-sm font-medium text-[var(--surface-light-muted)]">
-              Upcoming and in-progress. Copy the link for the candidate to join.
+              Scheduled and in progress. Copy the join link for the candidate.
             </p>
           </div>
           <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full min-w-[560px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Candidate</th>
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Type</th>
+                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">AI model</th>
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Scheduled at</th>
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Status</th>
                   <th className="min-w-[200px] px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--surface-light-border)]">
-                {schedules
-                  .filter(
-                    (s) =>
-                      String(s.status ?? '').toLowerCase() === 'scheduled' ||
-                      String(s.status ?? '').toLowerCase() === 'in_progress'
-                  )
-                  .map((s) => {
+                {upcomingSchedules.map((s) => {
                     const scheduleId = s.id ?? '';
                     const status = String(s.status ?? '').toLowerCase().replace(/\s+/g, '_');
                     const meta =
@@ -659,6 +828,9 @@ export default function RecruiterDashboardPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{s.role}</td>
+                        <td className="px-6 py-4 text-[var(--surface-light-fg)]">
+                          {s.interviewerPersona === 'zara' || s.interviewer_persona === 'zara' ? 'ZaraAlex' : 'Ethan'}
+                        </td>
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{new Date(s.scheduled_at).toLocaleString()}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${meta.pill}`}>
@@ -690,13 +862,15 @@ export default function RecruiterDashboardPage() {
               </tbody>
             </table>
           </div>
-          {schedules.filter((s) => ['scheduled', 'in_progress'].includes(String(s.status ?? '').toLowerCase())).length === 0 && (
+          {upcomingSchedules.length === 0 && (
             <div className="px-6 py-8 text-center text-sm font-medium text-[var(--surface-light-muted)]">
               No scheduled or in-progress interviews. Create one above or schedule from Applicants.
             </div>
           )}
         </Card>
+        </section>
 
+        <section id="recruiter-applications" className="scroll-mt-24">
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-4 sm:px-6">
             <div>
@@ -795,34 +969,38 @@ export default function RecruiterDashboardPage() {
             </div>
           )}
         </Card>
+        </section>
 
+        <section id="recruiter-results" className="scroll-mt-24">
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
-          <div className="border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-6 py-4">
-            <h3 className="font-semibold text-[var(--surface-light-fg)]">Interview results</h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-6 py-4">
+            <div>
+            <h3 className="font-semibold text-[var(--surface-light-fg)]">Recent interview results</h3>
             <p className="mt-0.5 text-sm font-medium text-[var(--surface-light-muted)]">
-              {(() => {
-                const completed = schedules.filter(
-                  (s) => String(s.status ?? '').toLowerCase() === 'completed'
-                );
-                return `${completed.length} completed interview${completed.length !== 1 ? 's' : ''}`;
-              })()}
+              {completedSchedules.length} completed total — showing the latest {Math.min(5, completedSchedules.length)} here.
             </p>
+            </div>
+            <Link
+              href="/recruiter/results"
+              className="shrink-0 rounded-xl border border-[var(--accent)] bg-[var(--accent-muted)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-white"
+            >
+              Open full results
+            </Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Candidate</th>
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Type</th>
+                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">AI model</th>
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Scheduled at</th>
                   <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Status</th>
                   <th className="min-w-[200px] px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--surface-light-border)]">
-                {schedules
-                  .filter((s) => String(s.status ?? '').toLowerCase() === 'completed')
-                  .map((s) => {
+                {completedSchedules.slice(0, 5).map((s) => {
                     const scheduleId = s.id ?? '';
                     const status = String(s.status ?? '').toLowerCase().replace(/\s+/g, '_');
                     const meta =
@@ -840,6 +1018,9 @@ export default function RecruiterDashboardPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{s.role}</td>
+                        <td className="px-6 py-4 text-[var(--surface-light-fg)]">
+                          {s.interviewerPersona === 'zara' || s.interviewer_persona === 'zara' ? 'ZaraAlex' : 'Ethan'}
+                        </td>
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{new Date(s.scheduled_at).toLocaleString()}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${meta.pill}`}>
@@ -872,12 +1053,20 @@ export default function RecruiterDashboardPage() {
               </tbody>
             </table>
           </div>
-          {schedules.filter((s) => String(s.status ?? '').toLowerCase() === 'completed').length === 0 && (
+          {completedSchedules.length === 0 && (
             <div className="px-6 py-12 text-center text-sm font-medium text-[var(--surface-light-muted)]">
               No completed interview results yet. When candidates finish interviews, they will appear here.
             </div>
           )}
+          {completedSchedules.length > 5 && (
+            <div className="border-t border-[var(--surface-light-border)] px-6 py-4 text-center">
+              <Link href="/recruiter/results" className="text-sm font-semibold text-[var(--accent)] hover:underline">
+                View all {completedSchedules.length} completed interviews →
+              </Link>
+            </div>
+          )}
         </Card>
+        </section>
       </div>
     </AppShell>
   );
