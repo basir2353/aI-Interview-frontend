@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getBackendOrigin } from '@/lib/backendOrigin';
 
-// Allow this route to run up to 5 minutes (platform may cap lower, e.g. Vercel 60s).
+// Allow this route to run up to 5 minutes (platform may cap lower, e.g. Vercel 60s on Hobby).
 export const maxDuration = 300;
 
-const BACKEND_ORIGIN = (process.env.BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '');
+const BACKEND_ORIGIN = getBackendOrigin();
 const UPSTREAM_PATH = '/api/v1/transcribe';
 // Whisper (especially on CPU) can be slow; allow up to 4 minutes for long clips.
 const FETCH_TIMEOUT_MS = 240000;

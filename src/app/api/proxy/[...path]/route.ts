@@ -5,8 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getBackendOrigin } from '@/lib/backendOrigin';
 
-const BACKEND_ORIGIN = (process.env.BACKEND_URL || 'http://localhost:4000').replace(/\/$/, '');
+const BACKEND_ORIGIN = getBackendOrigin();
 const API_PREFIX = '/api/v1';
 // Start/join and first LLM turn can take longer under load; keep timeout generous.
 const FETCH_TIMEOUT_MS = 45000;

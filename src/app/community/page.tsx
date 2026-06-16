@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import { getBackendOrigin } from '@/lib/backendOrigin';
 import { api, type CommunityPost, type CommunityComment, type CommunityUserType, type CommunityPostType } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -21,12 +22,15 @@ function timeAgo(dateStr: string): string {
   return d.toLocaleDateString();
 }
 
-/** Resolve image URL: backend returns /uploads/community/... so prepend API origin when needed. */
+/** Resolve image URL: backend returns /uploads/... — proxy via /api/uploads in production. */
 function imageUrl(url: string): string {
   if (!url) return url;
   if (url.startsWith('http')) return url;
-  const base = typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || window.location.origin) : process.env.NEXT_PUBLIC_API_URL || '';
-  return base ? `${base.replace(/\/$/, '')}${url.startsWith('/') ? url : `/${url}`}` : url;
+  if (url.startsWith('/uploads/')) {
+    return `/api${url}`;
+  }
+  const base = getBackendOrigin();
+  return `${base}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
 /** Extract #hashtags from text (alphanumeric + underscore). */

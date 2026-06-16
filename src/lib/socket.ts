@@ -4,11 +4,9 @@
  */
 
 import { io, Socket } from 'socket.io-client';
+import { getBackendOrigin } from './backendOrigin';
 
-const SOCKET_URL =
-  typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_WS_URL || window.location.origin)
-    : 'http://localhost:4000';
+const SOCKET_URL = getBackendOrigin();
 
 let socket: Socket | null = null;
 

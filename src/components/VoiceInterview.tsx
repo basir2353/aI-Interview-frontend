@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { getBackendOrigin } from '@/lib/backendOrigin';
 import { useVoiceInterview } from '../hooks/useVoiceInterview';
 import { WaveAnimation } from './WaveAnimation';
 import { TranscriptPanel } from './TranscriptPanel';
@@ -21,7 +22,7 @@ export function VoiceInterview({
     sessionId,
     interviewId,
     category = 'Technical',
-    serverUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000',
+    serverUrl = getBackendOrigin(),
 }: VoiceInterviewProps) {
     const [elapsedTime, setElapsedTime] = useState(0);
     const [showScores, setShowScores] = useState(false);
