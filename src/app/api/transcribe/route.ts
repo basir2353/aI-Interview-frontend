@@ -4,7 +4,6 @@ import { getBackendOrigin } from '@/lib/backendOrigin';
 // Allow this route to run up to 5 minutes (platform may cap lower, e.g. Vercel 60s on Hobby).
 export const maxDuration = 300;
 
-const BACKEND_ORIGIN = getBackendOrigin();
 const UPSTREAM_PATH = '/api/v1/transcribe';
 // Whisper (especially on CPU) can be slow; allow up to 4 minutes for long clips.
 const FETCH_TIMEOUT_MS = 240000;
@@ -17,7 +16,7 @@ export async function POST(req: NextRequest) {
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${BACKEND_ORIGIN}${UPSTREAM_PATH}`, {
+    const res = await fetch(`${getBackendOrigin()}${UPSTREAM_PATH}`, {
       method: 'POST',
       body,
       headers: incomingContentType ? { 'Content-Type': incomingContentType } : undefined,

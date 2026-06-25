@@ -7,7 +7,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBackendOrigin } from '@/lib/backendOrigin';
 
-const BACKEND_ORIGIN = getBackendOrigin();
 const API_PREFIX = '/api/v1';
 // Start/join and first LLM turn can take longer under load; keep timeout generous.
 const FETCH_TIMEOUT_MS = 45000;
@@ -72,7 +71,7 @@ async function proxy(
   opts: { method: string; body?: ArrayBuffer; contentType?: string }
 ) {
   const path = pathSegments.join('/');
-  const url = `${BACKEND_ORIGIN}${API_PREFIX}/${path}`;
+  const url = `${getBackendOrigin()}${API_PREFIX}/${path}`;
 
   const headers: Record<string, string> = {};
   const auth = req.headers.get('authorization');
@@ -124,15 +123,12 @@ async function proxy(
           : err instanceof Error
             ? err.message
             : 'Connection failed';
-    // One-line log to avoid spamming the terminal with stack traces
-    console.error(
-      `[Proxy] ${opts.method} ${path} → ${shortReason}. Start backend: cd backend && npm run dev`
-    );
+    console.error(`[Proxy] ${opts.method} ${path} → ${shortReason}`);
     return NextResponse.json(
       {
         error: 'Backend unavailable',
         message:
-          'Cannot reach the backend. Start it with: cd backend && npm run dev',
+          'Cannot reach the backend API. If using Railway, check the backend deploy logs and ensure DATABASE_URL is linked.',
         details: process.env.NODE_ENV === 'development' ? shortReason : undefined,
       },
       { status: isAbort ? 504 : 503 }

@@ -110,7 +110,8 @@ export default function AdminLoginPage() {
             </form>
 
             <p className="mt-6 border-t border-[var(--surface-light-border)] pt-6 text-center text-xs font-medium text-[var(--surface-light-muted)]">
-              <strong>Super admin:</strong> Use ADMIN_EMAIL and ADMIN_PASSWORD from backend .env (default: admin@example.com / admin123).
+              <strong>Super admin:</strong> Use <code className="text-[var(--surface-light-fg)]">ADMIN_EMAIL</code> and{' '}
+              <code className="text-[var(--surface-light-fg)]">ADMIN_PASSWORD</code> from your backend environment (Railway variables).
               <br />
               <span className="mt-1 block">After login, go to <strong>Admins</strong> in the sidebar to add more admins.</span>
             </p>
