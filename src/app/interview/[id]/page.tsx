@@ -660,7 +660,7 @@ export default function LiveInterviewPage() {
           setLiveCaption(segments[i]);
           setIntroSpeaking(isIntroBeat);
           await speakSegment(segments[i], isIntroBeat);
-          await pause(isIntroBeat ? 350 : 180);
+          await pause(isIntroBeat ? 280 : 160);
         }
         if (questionTurn?.content?.trim()) {
           setDisplayQuestion(questionTurn.content.trim());

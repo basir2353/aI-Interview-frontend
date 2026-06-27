@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
 import { getInterviewNoteLines, getInterviewNotesSpeechScript } from '@/lib/interviewNoteLines';
-import { pickPreferredInterviewerVoice, waitForSpeechVoices } from '@/lib/voicePreferences';
+import { speakInterviewerText, cancelInterviewerSpeech } from '@/lib/interviewerSpeech';
 
 export type InterviewInstructionsOverlayProps = {
   showCodeTab: boolean;
@@ -38,18 +38,8 @@ export function InterviewInstructionsOverlay({
     let cancelled = false;
 
     const run = async () => {
-      await waitForSpeechVoices();
       if (cancelled) return;
-      const voices = window.speechSynthesis.getVoices();
-      const voice = pickPreferredInterviewerVoice(voices);
-      const lang = interviewLang || voice?.lang || 'en-US';
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(script);
-      if (voice) utterance.voice = voice;
-      utterance.lang = lang;
-      utterance.rate = 0.96;
-      utterance.pitch = 1.03;
-      window.speechSynthesis.speak(utterance);
+      await speakInterviewerText(script, { lang: interviewLang });
     };
 
     /** Brief delay so a screen-share picker (if open from “Next”) can settle before TTS. */
@@ -60,7 +50,7 @@ export function InterviewInstructionsOverlay({
     return () => {
       cancelled = true;
       clearTimeout(delayTimer);
-      window.speechSynthesis.cancel();
+      cancelInterviewerSpeech();
     };
   }, [interviewLang, showCodeTab, codingTurnActive, showNotepadTab]);
 

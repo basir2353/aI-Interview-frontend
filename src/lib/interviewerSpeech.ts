@@ -1,4 +1,11 @@
-import { pickPreferredInterviewerVoice, waitForSpeechVoices } from '@/lib/voicePreferences';
+import {
+  applyInterviewerSpeechSettings,
+  estimateInterviewerSpeechDurationMs,
+  INTERVIEWER_SPEECH_PROFILE,
+  pickPreferredInterviewerVoice,
+  splitTextForNaturalSpeech,
+  waitForSpeechVoices,
+} from '@/lib/voicePreferences';
 
 let speakGeneration = 0;
 
@@ -10,16 +17,43 @@ export function cancelInterviewerSpeech(): void {
   }
 }
 
-/** Estimate how long TTS should take (ms) so we can recover if onend never fires. */
-function estimateSpeechDurationMs(text: string): number {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(3500, Math.min(90000, words * 450 + 1000));
+const pause = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
+
+function speakSingleUtterance(
+  text: string,
+  generation: number,
+  options: { lang?: string; onSegmentStart?: () => void }
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (generation !== speakGeneration || !window.speechSynthesis) {
+      resolve();
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const voice = pickPreferredInterviewerVoice(voices);
+    if (voice) utterance.voice = voice;
+    utterance.lang = options.lang || voice?.lang || 'en-US';
+    applyInterviewerSpeechSettings(utterance);
+
+    let started = false;
+    utterance.onstart = () => {
+      if (generation !== speakGeneration) return;
+      if (!started) {
+        started = true;
+        options.onSegmentStart?.();
+      }
+    };
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 /**
- * Speak interviewer text and resolve when finished (or cancelled).
- * Uses a generation counter so stale onend handlers cannot open the mic late.
- * Includes Chrome workarounds: resume() poll + timeout fallback when onend is lost.
+ * Speak interviewer text with human pacing: slower rate + brief pauses between sentences.
+ * Resolves when finished (or cancelled). Includes Chrome resume() + timeout fallbacks.
  */
 export async function speakInterviewerText(
   text: string,
@@ -52,6 +86,7 @@ export async function speakInterviewerText(
     let settled = false;
     let resumeInterval: ReturnType<typeof setInterval> | null = null;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let onStartFired = false;
 
     const done = () => {
       if (settled || generation !== speakGeneration) return;
@@ -62,7 +97,6 @@ export async function speakInterviewerText(
       resolve();
     };
 
-    // Chrome often pauses the speech queue mid-utterance — keep it alive.
     resumeInterval = setInterval(() => {
       if (generation !== speakGeneration) return;
       const synth = window.speechSynthesis;
@@ -74,21 +108,28 @@ export async function speakInterviewerText(
       console.warn('[TTS] Utterance timeout — advancing pipeline', { preview: trimmed.slice(0, 72) });
       window.speechSynthesis.cancel();
       done();
-    }, estimateSpeechDurationMs(trimmed));
+    }, estimateInterviewerSpeechDurationMs(trimmed));
 
-    const utterance = new SpeechSynthesisUtterance(trimmed);
-    const voices = window.speechSynthesis.getVoices();
-    const voice = pickPreferredInterviewerVoice(voices);
-    if (voice) utterance.voice = voice;
-    utterance.lang = options?.lang || voice?.lang || 'en-US';
-    utterance.rate = 0.94;
-    utterance.pitch = 1.03;
-    utterance.onstart = () => {
-      if (generation !== speakGeneration) return;
-      options?.onStart?.();
-    };
-    utterance.onend = done;
-    utterance.onerror = done;
-    window.speechSynthesis.speak(utterance);
+    const segments = splitTextForNaturalSpeech(trimmed);
+
+    void (async () => {
+      for (let i = 0; i < segments.length; i += 1) {
+        if (generation !== speakGeneration || settled) return;
+
+        await speakSingleUtterance(segments[i]!, generation, {
+          lang: options?.lang,
+          onSegmentStart: () => {
+            if (onStartFired) return;
+            onStartFired = true;
+            options?.onStart?.();
+          },
+        });
+
+        if (i < segments.length - 1 && generation === speakGeneration && !settled) {
+          await pause(INTERVIEWER_SPEECH_PROFILE.pauseAfterSentenceMs);
+        }
+      }
+      done();
+    })();
   });
 }
