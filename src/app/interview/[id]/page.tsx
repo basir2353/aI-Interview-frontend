@@ -26,6 +26,7 @@ import {
   InterviewStatusBar,
   type VoicePipelinePhase,
 } from '@/components/interview/InterviewStatusBar';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 
 export default function LiveInterviewPage() {
   const params = useParams();
@@ -984,7 +985,7 @@ export default function LiveInterviewPage() {
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex shrink-0 items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            <p className="text-lg font-semibold tracking-tight text-[var(--interview-fg)] sm:text-xl">Intervion</p>
+            <IntervionLogo className="h-7 sm:h-8" />
           </div>
           <select
             value={interviewLang}

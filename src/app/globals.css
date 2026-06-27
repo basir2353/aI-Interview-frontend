@@ -354,6 +354,30 @@ input.ui-time::-webkit-outer-spin-button {
   border-color: var(--surface-light-border);
 }
 
+.intervion-logo-on-light {
+  display: none;
+}
+
+.intervion-logo-on-dark {
+  display: block;
+}
+
+[data-theme="light"] .intervion-logo-on-light {
+  display: block;
+}
+
+[data-theme="light"] .intervion-logo-on-dark {
+  display: none;
+}
+
+[data-interview-room='true'] .intervion-logo-on-light {
+  display: none;
+}
+
+[data-interview-room='true'] .intervion-logo-on-dark {
+  display: block;
+}
+
 @layer components {
   .dash-card.dash-feature-card {
     border-color: color-mix(in srgb, var(--accent) 22%, var(--surface-light-border));

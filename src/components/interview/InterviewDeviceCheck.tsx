@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { VideoPreview } from '@/components/VideoPreview';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { useTheme } from '@/context/ThemeContext';
 
 type InterviewDeviceCheckProps = {
@@ -104,14 +105,8 @@ export function InterviewDeviceCheck({
           isLight ? 'border-[var(--surface-light-border)] bg-[var(--surface-light-card)]/80' : 'border-white/10'
         }`}
       >
-        <p
-          className={`text-xs font-semibold uppercase tracking-[0.2em] ${
-            isLight ? 'text-[var(--accent)]' : 'text-violet-300/90'
-          }`}
-        >
-          Intervion
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Check your camera &amp; microphone</h1>
+        <IntervionLogo className="mb-3 h-8" />
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Check your camera &amp; microphone</h1>
         <p className={`mt-2 max-w-xl text-sm ${isLight ? 'text-[var(--surface-light-muted)]' : 'text-white/60'}`}>
           We&apos;ll use your mic for answers and your camera for a comfortable, natural interview. Adjust lighting if needed, then continue.
         </p>

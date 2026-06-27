@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { getNavForPathname } from '@/components/layout/navConfig';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { useTheme } from '@/context/ThemeContext';
 
 function UserIcon({ className }: { className?: string }) {
@@ -238,12 +239,14 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3 lg:px-8">
         <Link
           href={area === 'admin' ? '/admin' : '/'}
-          className="flex min-w-0 shrink-0 items-center gap-2 text-[var(--landing-text)] transition-opacity hover:opacity-90 sm:gap-2.5"
+          className="flex min-w-0 shrink-0 items-center gap-2.5 text-[var(--landing-text)] transition-opacity hover:opacity-90"
         >
-          <span className="hidden shrink-0 sm:flex h-8 w-8 items-center justify-center rounded-full border border-[var(--landing-muted)] bg-transparent" />
-          <span className="truncate font-display text-base font-semibold tracking-tight sm:text-lg">
-            {area === 'admin' ? 'Admin' : 'Intervion'}
-          </span>
+          <IntervionLogo className="h-7 sm:h-8" />
+          {area === 'admin' && (
+            <span className="truncate font-display text-sm font-semibold tracking-tight text-[var(--landing-muted)] sm:text-base">
+              Admin
+            </span>
+          )}
         </Link>
 
         <nav className="hidden items-center gap-0.5 md:flex">

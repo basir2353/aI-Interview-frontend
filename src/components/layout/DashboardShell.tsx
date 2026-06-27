@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import type { NavItem } from '@/components/layout/navConfig';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { cn } from '@/lib/cn';
 import type { LucideIcon } from 'lucide-react';
@@ -73,11 +74,11 @@ export function DashboardShell({
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-[var(--surface-light-border)] px-4">
-          <Link href={brandHref} className="flex items-center gap-2.5 font-display font-semibold text-[var(--surface-light-fg)]" onClick={closeSidebar}>
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--accent)] text-sm font-bold text-white">
-              {brandLabel.charAt(0)}
+          <Link href={brandHref} className="flex min-w-0 items-center gap-2.5" onClick={closeSidebar}>
+            <IntervionLogo className="h-7" />
+            <span className="truncate font-display text-sm font-semibold text-[var(--surface-light-muted)]">
+              {brandLabel}
             </span>
-            <span className="truncate">{brandLabel}</span>
           </Link>
           <button
             type="button"
