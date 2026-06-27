@@ -8,8 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getBackendOrigin } from '@/lib/backendOrigin';
 
 const API_PREFIX = '/api/v1';
-// Start/join and first LLM turn can take longer under load; keep timeout generous.
-const FETCH_TIMEOUT_MS = 45000;
+// Vercel Pro allows up to 60s; Hobby caps at 10s — keep under platform limit.
+export const maxDuration = 60;
+const FETCH_TIMEOUT_MS = 55_000;
 
 function getPath(params: { path?: string[] }): string[] {
   return Array.isArray(params.path) ? params.path : [];
@@ -127,8 +128,9 @@ async function proxy(
     return NextResponse.json(
       {
         error: 'Backend unavailable',
-        message:
-          'Cannot reach the backend API. If using Railway, check the backend deploy logs and ensure DATABASE_URL is linked.',
+        message: isAbort
+          ? 'Backend request timed out. On Vercel Hobby, serverless functions are limited to 10 seconds — upgrade to Pro or retry a faster action.'
+          : 'Cannot reach the backend API. If using Railway, check the backend deploy logs and ensure DATABASE_URL is linked.',
         details: process.env.NODE_ENV === 'development' ? shortReason : undefined,
       },
       { status: isAbort ? 504 : 503 }
