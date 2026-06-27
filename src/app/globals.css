@@ -27,20 +27,27 @@
   --landing-accent-hover: #c4b5fd;
   --landing-accent-solid: #7c3aed;
 
-  /* Light surfaces (admin, recruiter, report, interview room) — same hue, light, solid (no transparent grey) */
-  --surface-light: #f4f2ff;
-  --surface-light-fg: #1a1625;
-  --surface-light-fg-heading: #0f0d18;
-  --surface-light-muted: #4c4866;
-  --surface-light-muted-soft: #6b6580;
-  --surface-light-border: rgba(139, 92, 246, 0.18);
+  /* Light surfaces (admin, recruiter, report) — neutral slate base, purple accent */
+  --surface-light: #f8fafc;
+  --surface-light-fg: #0f172a;
+  --surface-light-fg-heading: #020617;
+  --surface-light-muted: #64748b;
+  --surface-light-muted-soft: #94a3b8;
+  --surface-light-border: #e2e8f0;
   --surface-light-card: #ffffff;
-  --surface-light-input: #fff;
+  --surface-light-input: #ffffff;
+
+  /* Dashboard shells (admin + recruiter) */
+  --dash-sidebar: #ffffff;
+  --dash-sidebar-active: rgba(124, 58, 237, 0.08);
+  --dash-table-head: #f8fafc;
+  --dash-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --dash-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
 
   /* Accent (buttons, links, focus) — one brand color */
   --accent: #7c3aed;
   --accent-hover: #8b5cf6;
-  --accent-muted: rgba(124, 58, 237, 0.15);
+  --accent-muted: rgba(124, 58, 237, 0.08);
   --accent-ring: rgba(124, 58, 237, 0.35);
 
   /* Semantic (keep minimal, same grade where possible) */
@@ -217,14 +224,18 @@ input.ui-time::-webkit-outer-spin-button {
   --landing-accent-hover: #5b21b6;
   --landing-accent-solid: #6d28d9;
 
-  --surface-light: #ffffff;
-  --surface-light-fg: #1a1625;
-  --surface-light-fg-heading: #0f0d18;
-  --surface-light-muted: #4c4866;
-  --surface-light-muted-soft: #6b6580;
-  --surface-light-border: rgba(139, 92, 246, 0.18);
+  --surface-light: #f8fafc;
+  --surface-light-fg: #0f172a;
+  --surface-light-fg-heading: #020617;
+  --surface-light-muted: #64748b;
+  --surface-light-muted-soft: #94a3b8;
+  --surface-light-border: #e2e8f0;
   --surface-light-card: #ffffff;
-  --surface-light-input: #fff;
+  --surface-light-input: #ffffff;
+
+  --dash-sidebar: #ffffff;
+  --dash-sidebar-active: rgba(109, 40, 217, 0.08);
+  --dash-table-head: #f8fafc;
 
   --interview-bg: #f8fafc;
   --interview-fg: #0f172a;
@@ -252,6 +263,66 @@ input.ui-time::-webkit-outer-spin-button {
 [data-theme="light"] .glass-card {
   background: var(--surface-light-card);
   border-color: var(--surface-light-border);
+}
+
+@layer components {
+  .dash-card {
+    background: var(--surface-light-card);
+    border: 1px solid var(--surface-light-border);
+    border-radius: 0.75rem;
+    box-shadow: var(--dash-shadow);
+  }
+
+  .dash-table-head {
+    background: var(--dash-table-head);
+    border-bottom: 1px solid var(--surface-light-border);
+  }
+
+  .dash-table-row:hover {
+    background: rgba(248, 250, 252, 0.8);
+  }
+
+  .dash-input {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--surface-light-border);
+    background: var(--surface-light-input);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    color: var(--surface-light-fg);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .dash-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+
+  .dash-sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  .dash-sidebar-link-active {
+    background: var(--dash-sidebar-active);
+    color: var(--accent);
+  }
+
+  .dash-sidebar-link-inactive {
+    color: var(--surface-light-muted);
+  }
+
+  .dash-sidebar-link-inactive:hover {
+    background: var(--surface-light);
+    color: var(--surface-light-fg);
+  }
 }
 
 @layer utilities {

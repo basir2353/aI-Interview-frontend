@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
-import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
+import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import {
@@ -148,32 +147,17 @@ export default function RecruiterJobsPage() {
   }
 
   return (
-    <AppShell
-      title="Recruiter Jobs"
-      subtitle="Post jobs, review applications, and schedule interviews"
-      backHref="/recruiter"
-      backLabel="Recruiter dashboard"
-      theme="light"
+    <RecruiterShell
+      title="Jobs"
+      description="Post jobs, review applications, and schedule interviews"
       actions={
         <div className="flex gap-2">
-          <Link href="/recruiter/applicants" className="rounded-lg border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-2 text-sm font-semibold text-[var(--accent)] transition-colors hover:opacity-90">
+          <Link href="/recruiter/applicants" className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]">
             Applicants
           </Link>
-          <Link href="/jobs" className="rounded-lg border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-2 text-sm font-semibold text-[var(--accent)] transition-colors hover:opacity-90">
-            View public jobs
+          <Link href="/jobs" className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]">
+            Public jobs
           </Link>
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => {
-              localStorage.removeItem('recruiterToken');
-              localStorage.removeItem('recruiterEmail');
-              localStorage.removeItem('recruiterName');
-              window.location.href = '/recruiter/login';
-            }}
-          >
-            Logout
-          </Button>
         </div>
       }
     >
@@ -183,7 +167,6 @@ export default function RecruiterJobsPage() {
         </div>
       )}
       <div className="space-y-8">
-        <RecruiterSubnav />
         {error && (
           <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm font-medium text-[var(--error-text)]">
             {error}
@@ -356,6 +339,6 @@ export default function RecruiterJobsPage() {
           </div>
         </Card>
       </div>
-    </AppShell>
+    </RecruiterShell>
   );
 }

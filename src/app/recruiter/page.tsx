@@ -5,10 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, type AdminScheduleRow, type RecruiterApplication } from '@/lib/api';
 import type { InterviewRole, InterviewerPersona } from '@/types';
-import { AppShell } from '@/components/layout/AppShell';
-import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
+import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { DashboardCard } from '@/components/dashboard/DashboardCard';
+import { DashboardLoading } from '@/components/dashboard/DashboardLoading';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { StatusBadge, statusToVariant } from '@/components/dashboard/StatusBadge';
+import { Bot, Calendar, CheckCircle2, ClipboardList, Users } from 'lucide-react';
 import {
   pickPreferredInterviewerVoice,
   readSavedVoicePreference,
@@ -173,13 +176,6 @@ export default function RecruiterDashboardPage() {
       window.speechSynthesis.cancel();
     };
   }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('recruiterToken');
-    localStorage.removeItem('recruiterEmail');
-    localStorage.removeItem('recruiterName');
-    router.replace('/recruiter/login');
-  };
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -357,135 +353,91 @@ export default function RecruiterDashboardPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-light)]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)]/20 border-t-[var(--accent)]" />
-          <p className="text-sm font-medium text-[var(--surface-light-muted)]">Loading your dashboard…</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoading message="Loading your dashboard…" />;
   }
 
   return (
-    <AppShell
-      title="Recruiter hub"
-      subtitle={`${recruiterName || recruiterEmail || 'Recruiter'} · Schedules & outcomes`}
-      backHref="/"
-      backLabel="Home"
-      theme="light"
+    <RecruiterShell
+      title="Dashboard"
+      description={`${recruiterName || recruiterEmail || 'Recruiter'} · Schedules & outcomes`}
       actions={
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setCreateOpen((v) => !v)} size="md">
             {createOpen ? 'Close form' : 'New interview'}
           </Button>
-          <Button onClick={handleLogout} variant="secondary" size="md">
-            Logout
-          </Button>
         </div>
       }
     >
-      <div className="space-y-8 sm:space-y-10">
-        <RecruiterSubnav />
-
-        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-gradient-to-br from-[var(--surface-light-card)] to-[var(--accent-muted)]/30 p-5 shadow-sm">
+      <div className="space-y-6">
+        <DashboardCard className="border-[var(--accent)]/20 bg-gradient-to-r from-white to-[var(--accent-muted)]">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Interview experience</p>
-              <p className="mt-1 text-lg font-semibold text-[var(--surface-light-fg)]">
-                AI interviewer: {defaultInterviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan'}
-              </p>
-              <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">
-                {recruiterCompanyName ? (
-                  <>Company on profile: <span className="font-medium text-[var(--surface-light-fg)]">{recruiterCompanyName}</span></>
-                ) : (
-                  <>Add your company name and choose the default presenter for new schedules.</>
-                )}
-              </p>
+            <div className="flex items-start gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white">
+                <Bot className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-[var(--surface-light-muted)]">AI interviewer</p>
+                <p className="mt-0.5 text-lg font-semibold text-[var(--surface-light-fg)]">
+                  {defaultInterviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan'}
+                </p>
+                <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">
+                  {recruiterCompanyName ? (
+                    <>
+                      Company:{' '}
+                      <span className="font-medium text-[var(--surface-light-fg)]">{recruiterCompanyName}</span>
+                    </>
+                  ) : (
+                    'Set your company name and default presenter for new interviews.'
+                  )}
+                </p>
+              </div>
             </div>
             <Link
               href="/recruiter/interviewer-settings"
-              className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--accent-hover)]"
+              className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--accent-hover)]"
             >
-              AI interviewer &amp; company
+              Configure
             </Link>
           </div>
-        </Card>
+        </DashboardCard>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <button
-            type="button"
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Scheduled"
+            value={scheduledCount}
+            hint="Awaiting candidate"
+            icon={Calendar}
             onClick={() => scrollToSection('recruiter-upcoming')}
-            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Scheduled</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{scheduledCount}</p>
-            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Awaiting candidate</p>
-          </button>
-          <button
-            type="button"
+          />
+          <StatCard
+            label="In progress"
+            value={inProgressCount}
+            hint="Live interviews"
+            icon={Users}
+            iconColor="text-amber-600 bg-amber-50"
             onClick={() => scrollToSection('recruiter-upcoming')}
-            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">In progress</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{inProgressCount}</p>
-            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Live interviews</p>
-          </button>
-          <button
-            type="button"
+          />
+          <StatCard
+            label="Applications"
+            value={applications.length}
+            hint="CVs & job matches"
+            icon={ClipboardList}
+            iconColor="text-blue-600 bg-blue-50"
             onClick={() => scrollToSection('recruiter-applications')}
-            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Applications</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{applications.length}</p>
-            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">CVs & job matches</p>
-          </button>
-          <button
-            type="button"
+          />
+          <StatCard
+            label="Completed"
+            value={completedSchedules.length}
+            hint="Reports available"
+            icon={CheckCircle2}
+            iconColor="text-emerald-600 bg-emerald-50"
             onClick={() => scrollToSection('recruiter-results')}
-            className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 text-left shadow-sm transition hover:border-[var(--accent)] hover:shadow-md"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Completed</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-[var(--surface-light-fg)]">{completedSchedules.length}</p>
-            <p className="mt-0.5 text-xs text-[var(--surface-light-muted)]">Reports available</p>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-[var(--surface-light-border)] bg-[var(--accent-muted)]/40 px-4 py-3 text-sm">
-          <span className="font-semibold text-[var(--surface-light-fg)]">On this page:</span>
-          <button
-            type="button"
-            onClick={() => scrollToSection('recruiter-create', true)}
-            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--accent)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
-          >
-            Create interview
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection('recruiter-upcoming')}
-            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--surface-light-fg)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
-          >
-            Upcoming
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection('recruiter-applications')}
-            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--surface-light-fg)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
-          >
-            Applications
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollToSection('recruiter-results')}
-            className="rounded-lg bg-[var(--surface-light-card)] px-3 py-1.5 font-medium text-[var(--surface-light-fg)] ring-1 ring-[var(--surface-light-border)] hover:bg-[var(--accent-muted)]"
-          >
-            Results
-          </button>
+          />
         </div>
 
         <section id="recruiter-create" className="scroll-mt-24">
           {!createOpen && (
-            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 shadow-sm">
+            <DashboardCard>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-[var(--surface-light-fg)]">Schedule a new interview</h2>
@@ -497,12 +449,12 @@ export default function RecruiterDashboardPage() {
                   Open scheduling form
                 </Button>
               </div>
-            </Card>
+            </DashboardCard>
           )}
-        {createOpen && (
-          <Card className="relative overflow-hidden rounded-2xl p-4 sm:rounded-3xl sm:p-7">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_300px_at_30%_-20%,var(--accent-muted),transparent_55%)]" />
-            <div className="relative">
+          {createOpen && (
+            <DashboardCard className="relative overflow-hidden">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(1200px_300px_at_30%_-20%,var(--accent-muted),transparent_55%)]" />
+              <div className="relative">
               <h2 className="text-xl font-semibold tracking-tight text-[var(--surface-light-fg)]">Create interview link</h2>
               <p className="mt-1 text-sm font-medium text-[var(--surface-light-muted)]">
                 This interview is attached to your recruiter account.
@@ -784,29 +736,27 @@ export default function RecruiterDashboardPage() {
                   </Button>
                 </div>
               </form>
-            </div>
-          </Card>
-        )}
+              </div>
+            </DashboardCard>
+          )}
         </section>
 
         <section id="recruiter-upcoming" className="scroll-mt-24">
-        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
-          <div className="border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-4 sm:px-6">
-            <h3 className="font-semibold text-[var(--surface-light-fg)]">Upcoming &amp; live interviews</h3>
-            <p className="mt-0.5 text-sm font-medium text-[var(--surface-light-muted)]">
-              Scheduled and in progress. Copy the join link for the candidate.
-            </p>
-          </div>
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <DashboardCard
+          title="Upcoming & live interviews"
+          description="Scheduled and in progress. Copy the join link for the candidate."
+          noPadding
+        >
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Candidate</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Type</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">AI model</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Scheduled at</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Status</th>
-                  <th className="min-w-[200px] px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Actions</th>
+                <tr className="dash-table-head">
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Candidate</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Type</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">AI model</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Scheduled at</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Status</th>
+                  <th className="min-w-[200px] px-5 py-3 font-medium text-[var(--surface-light-muted)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--surface-light-border)]">
@@ -820,8 +770,8 @@ export default function RecruiterDashboardPage() {
                         pill: 'bg-[var(--accent-muted)] text-[var(--surface-light-muted)] ring-1 ring-[var(--surface-light-border)] font-semibold',
                       } as const);
                     return (
-                      <tr key={scheduleId} className="transition-colors hover:bg-[var(--accent-muted)]/60">
-                        <td className="px-6 py-4">
+                      <tr key={scheduleId} className="dash-table-row transition-colors">
+                        <td className="px-5 py-3.5">
                           <div>
                             <p className="font-semibold text-[var(--surface-light-fg)]">{s.candidate_name || s.candidate_email}</p>
                             <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">{s.candidate_email}</p>
@@ -867,40 +817,38 @@ export default function RecruiterDashboardPage() {
               No scheduled or in-progress interviews. Create one above or schedule from Applicants.
             </div>
           )}
-        </Card>
+        </DashboardCard>
         </section>
 
         <section id="recruiter-applications" className="scroll-mt-24">
-        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-4 sm:px-6">
-            <div>
-              <h3 className="font-semibold text-[var(--surface-light-fg)]">Applications received</h3>
-              <p className="mt-0.5 text-sm font-medium text-[var(--surface-light-muted)]">
-                CVs received for your jobs. Match % shows how well the resume fits the job.
-              </p>
-            </div>
+        <DashboardCard
+          title="Applications received"
+          description="CVs received for your jobs. Match % shows how well the resume fits the job."
+          action={
             <Link
               href="/recruiter/applicants"
-              className="rounded-xl border border-[var(--accent)] bg-[var(--accent-muted)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-white"
+              className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
             >
-              View all applicants
+              View all
             </Link>
-          </div>
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          }
+          noPadding
+        >
+          <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Candidate</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Job</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Match</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Status</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Resume</th>
+                <tr className="dash-table-head">
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Candidate</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Job</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Match</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Status</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Resume</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--surface-light-border)]">
                 {applications.slice(0, 10).map((app) => (
-                  <tr key={app.id} className="transition-colors hover:bg-[var(--accent-muted)]/60">
-                    <td className="px-6 py-4">
+                  <tr key={app.id} className="dash-table-row transition-colors">
+                    <td className="px-5 py-3.5">
                       <div>
                         <p className="font-semibold text-[var(--surface-light-fg)]">{app.candidate_name || app.candidate_email || '—'}</p>
                         <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">{app.candidate_email}</p>
@@ -968,35 +916,33 @@ export default function RecruiterDashboardPage() {
               </Link>
             </div>
           )}
-        </Card>
+        </DashboardCard>
         </section>
 
         <section id="recruiter-results" className="scroll-mt-24">
-        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-6 py-4">
-            <div>
-            <h3 className="font-semibold text-[var(--surface-light-fg)]">Recent interview results</h3>
-            <p className="mt-0.5 text-sm font-medium text-[var(--surface-light-muted)]">
-              {completedSchedules.length} completed total — showing the latest {Math.min(5, completedSchedules.length)} here.
-            </p>
-            </div>
+        <DashboardCard
+          title="Recent interview results"
+          description={`${completedSchedules.length} completed total — showing the latest ${Math.min(5, completedSchedules.length)} here.`}
+          action={
             <Link
               href="/recruiter/results"
-              className="shrink-0 rounded-xl border border-[var(--accent)] bg-[var(--accent-muted)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-white"
+              className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
             >
-              Open full results
+              Full results
             </Link>
-          </div>
+          }
+          noPadding
+        >
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
-                <tr className="border-b border-[var(--surface-light-border)] bg-[var(--accent-muted)]">
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Candidate</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Type</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">AI model</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Scheduled at</th>
-                  <th className="px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Status</th>
-                  <th className="min-w-[200px] px-6 py-4 font-semibold text-[var(--surface-light-fg)]">Actions</th>
+                <tr className="dash-table-head">
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Candidate</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Type</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">AI model</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Scheduled at</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Status</th>
+                  <th className="min-w-[200px] px-5 py-3 font-medium text-[var(--surface-light-muted)]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--surface-light-border)]">
@@ -1010,8 +956,8 @@ export default function RecruiterDashboardPage() {
                         pill: 'bg-[var(--accent-muted)] text-[var(--surface-light-muted)] ring-1 ring-[var(--surface-light-border)] font-semibold',
                       } as const);
                     return (
-                      <tr key={scheduleId} className="transition-colors hover:bg-[var(--accent-muted)]/60">
-                        <td className="px-6 py-4">
+                      <tr key={scheduleId} className="dash-table-row transition-colors">
+                        <td className="px-5 py-3.5">
                           <div>
                             <p className="font-semibold text-[var(--surface-light-fg)]">{s.candidate_name || s.candidate_email}</p>
                             <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">{s.candidate_email}</p>
@@ -1065,9 +1011,9 @@ export default function RecruiterDashboardPage() {
               </Link>
             </div>
           )}
-        </Card>
+        </DashboardCard>
         </section>
       </div>
-    </AppShell>
+    </RecruiterShell>
   );
 }

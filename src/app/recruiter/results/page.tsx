@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, type AdminScheduleRow } from '@/lib/api';
-import { AppShell } from '@/components/layout/AppShell';
-import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
+import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Card } from '@/components/ui/Card';
 
 export default function RecruiterResultsPage() {
@@ -59,15 +58,11 @@ export default function RecruiterResultsPage() {
   }
 
   return (
-    <AppShell
+    <RecruiterShell
       title="Interview results"
-      subtitle="All completed interviews"
-      backHref="/recruiter"
-      backLabel="Dashboard"
-      theme="light"
+      description="All completed interviews"
     >
       <div className="space-y-6">
-        <RecruiterSubnav />
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light)]/80 p-0 shadow-sm">
           <div className="border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-6 py-4">
             <h3 className="font-semibold text-[var(--surface-light-fg)]">All interview results</h3>
@@ -142,6 +137,6 @@ export default function RecruiterResultsPage() {
           )}
         </Card>
       </div>
-    </AppShell>
+    </RecruiterShell>
   );
 }

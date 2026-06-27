@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
-import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
+import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type RecruiterApplication, type RecruiterJob } from '@/lib/api';
@@ -79,15 +78,11 @@ export default function RecruiterApplicantsPage() {
   };
 
   return (
-    <AppShell
+    <RecruiterShell
       title="Applicants"
-      subtitle="Review applicants by posted job"
-      backHref="/recruiter"
-      backLabel="Recruiter dashboard"
-      theme="light"
+      description="Review applicants by posted job"
     >
       <div className="space-y-4 sm:space-y-6">
-        <RecruiterSubnav />
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 shadow-sm sm:p-5">
           <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
             <input
@@ -237,6 +232,6 @@ export default function RecruiterApplicantsPage() {
           </Card>
         ))}
       </div>
-    </AppShell>
+    </RecruiterShell>
   );
 }

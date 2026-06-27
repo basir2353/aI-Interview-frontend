@@ -16,13 +16,17 @@ import {
 export function ConditionalSiteHeader() {
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith('/admin');
+  const isRecruiterApp =
+    pathname?.startsWith('/recruiter') &&
+    pathname !== '/recruiter/login' &&
+    pathname !== '/recruiter/forgot-password';
   const interviewOnboarding = useSyncExternalStore(
     subscribeInterviewRoomOnboarding,
     getInterviewRoomOnboarding,
     () => false
   );
   const isLiveInterviewById = Boolean(pathname?.match(/^\/interview\/(?!join)[^/]+$/));
-  if (isAdmin) return null;
+  if (isAdmin || isRecruiterApp) return null;
   if (isLiveInterviewById && interviewOnboarding) return null;
   return <SiteHeader />;
 }

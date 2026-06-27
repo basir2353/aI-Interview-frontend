@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import type { InterviewerPersona } from '@/types';
-import { AppShell } from '@/components/layout/AppShell';
-import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
+import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
@@ -76,16 +75,11 @@ export default function RecruiterInterviewerSettingsPage() {
   }
 
   return (
-    <AppShell
+    <RecruiterShell
       title="AI interviewer & company"
-      subtitle="Candidates see this interviewer in scheduled interviews. Company name is stored on your recruiter profile."
-      backHref="/recruiter"
-      backLabel="Dashboard"
-      theme="light"
+      description="Candidates see this interviewer in scheduled interviews. Company name is stored on your recruiter profile."
     >
       <div className="mx-auto max-w-lg space-y-6">
-        <RecruiterSubnav />
-
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 shadow-sm">
           <form onSubmit={handleSave} className="space-y-6">
             <div>
@@ -159,6 +153,6 @@ export default function RecruiterInterviewerSettingsPage() {
           </form>
         </Card>
       </div>
-    </AppShell>
+    </RecruiterShell>
   );
 }

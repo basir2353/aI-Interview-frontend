@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
-import { RecruiterSubnav } from '@/components/layout/RecruiterSubnav';
+import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type RecruiterApplication, type RecruiterCustomQuestionInput } from '@/lib/api';
@@ -177,19 +176,15 @@ export default function RecruiterSchedulePage() {
   };
 
   return (
-    <AppShell
+    <RecruiterShell
       title="Schedule interview"
-      subtitle={
+      description={
         applicationId
           ? 'Configure time, questions, and optional coding task for this applicant.'
           : 'Pick an applicant below, or open one from the applicants list — the URL will include their application id.'
       }
-      backHref="/recruiter/applicants"
-      backLabel="Applicants"
-      theme="light"
     >
       <div className="space-y-6">
-        <RecruiterSubnav />
         {error && <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm font-medium text-[var(--error-text)]">{error}</p>}
         {createdJoinUrl && (
           <Card className="rounded-2xl border-[var(--success-border)] bg-[var(--success-bg)] p-5">
@@ -489,6 +484,6 @@ export default function RecruiterSchedulePage() {
           )}
         </Card>
       </div>
-    </AppShell>
+    </RecruiterShell>
   );
 }
