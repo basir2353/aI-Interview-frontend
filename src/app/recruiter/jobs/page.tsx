@@ -152,10 +152,10 @@ export default function RecruiterJobsPage() {
       description="Post jobs, review applications, and schedule interviews"
       actions={
         <div className="flex gap-2">
-          <Link href="/recruiter/applicants" className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]">
+          <Link href="/recruiter/applicants" className="dash-btn-outline">
             Applicants
           </Link>
-          <Link href="/jobs" className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-2 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]">
+          <Link href="/jobs" className="dash-btn-outline">
             Public jobs
           </Link>
         </div>

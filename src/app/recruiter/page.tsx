@@ -369,7 +369,7 @@ export default function RecruiterDashboardPage() {
       }
     >
       <div className="space-y-6">
-        <DashboardCard className="border-[var(--accent)]/20 bg-gradient-to-r from-white to-[var(--accent-muted)]">
+        <DashboardCard className="dash-feature-card">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white">
@@ -414,7 +414,7 @@ export default function RecruiterDashboardPage() {
             value={inProgressCount}
             hint="Live interviews"
             icon={Users}
-            iconColor="text-amber-600 bg-amber-50"
+            iconColor="dash-stat-icon-amber"
             onClick={() => scrollToSection('recruiter-upcoming')}
           />
           <StatCard
@@ -422,7 +422,7 @@ export default function RecruiterDashboardPage() {
             value={applications.length}
             hint="CVs & job matches"
             icon={ClipboardList}
-            iconColor="text-blue-600 bg-blue-50"
+            iconColor="dash-stat-icon-blue"
             onClick={() => scrollToSection('recruiter-applications')}
           />
           <StatCard
@@ -430,7 +430,7 @@ export default function RecruiterDashboardPage() {
             value={completedSchedules.length}
             hint="Reports available"
             icon={CheckCircle2}
-            iconColor="text-emerald-600 bg-emerald-50"
+            iconColor="dash-stat-icon-emerald"
             onClick={() => scrollToSection('recruiter-results')}
           />
         </div>
@@ -827,7 +827,7 @@ export default function RecruiterDashboardPage() {
           action={
             <Link
               href="/recruiter/applicants"
-              className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              className="dash-btn-outline shrink-0"
             >
               View all
             </Link>
@@ -926,7 +926,7 @@ export default function RecruiterDashboardPage() {
           action={
             <Link
               href="/recruiter/results"
-              className="rounded-lg border border-[var(--surface-light-border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--surface-light-fg)] transition hover:border-[var(--accent)] hover:text-[var(--accent)]"
+              className="dash-btn-outline shrink-0"
             >
               Full results
             </Link>

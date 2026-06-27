@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
             value={metrics.candidates}
             hint="View all candidates"
             icon={Briefcase}
-            iconColor="text-blue-600 bg-blue-50"
+            iconColor="dash-stat-icon-blue"
             href="/admin/candidates"
           />
           <StatCard
@@ -66,7 +66,7 @@ export default function AdminDashboardPage() {
             value={metrics.interviews}
             hint={`${scheduledCount} scheduled · ${completedCount} completed`}
             icon={Calendar}
-            iconColor="text-emerald-600 bg-emerald-50"
+            iconColor="dash-stat-icon-emerald"
             href="/admin/schedules"
           />
           <StatCard
@@ -74,7 +74,7 @@ export default function AdminDashboardPage() {
             value="—"
             hint="View all applications & CVs"
             icon={FileText}
-            iconColor="text-amber-600 bg-amber-50"
+            iconColor="dash-stat-icon-amber"
             href="/admin/applications"
           />
         </div>

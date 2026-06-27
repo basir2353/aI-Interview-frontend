@@ -7,7 +7,7 @@ const variantClasses: Record<StatusVariant, string> = {
   success: 'bg-[var(--success-bg)] text-[var(--success-text)] ring-1 ring-[var(--success-border)]',
   warning: 'bg-[var(--warning-bg)] text-[var(--warning-text)] ring-1 ring-[var(--warning-border)]',
   error: 'bg-[var(--error-bg)] text-[var(--error-text)] ring-1 ring-[var(--error-border)]',
-  neutral: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+  neutral: 'bg-[var(--dash-badge-neutral-bg)] text-[var(--dash-badge-neutral-fg)] ring-1 ring-[var(--dash-badge-neutral-border)]',
 };
 
 interface StatusBadgeProps {

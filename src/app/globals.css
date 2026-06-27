@@ -110,6 +110,16 @@ html[data-dashboard-app][data-theme="light"] {
 
   --background: #f8fafc;
   --foreground: #0f172a;
+
+  --dash-icon-amber-fg: #d97706;
+  --dash-icon-amber-bg: #fffbeb;
+  --dash-icon-blue-fg: #2563eb;
+  --dash-icon-blue-bg: #eff6ff;
+  --dash-icon-emerald-fg: #059669;
+  --dash-icon-emerald-bg: #ecfdf5;
+  --dash-badge-neutral-bg: #f1f5f9;
+  --dash-badge-neutral-fg: #475569;
+  --dash-badge-neutral-border: #e2e8f0;
 }
 
 html[data-dashboard-app][data-theme="light"] body {
@@ -142,6 +152,16 @@ html[data-dashboard-app][data-theme="dark"] {
 
   --background: #0f172a;
   --foreground: #e2e8f0;
+
+  --dash-icon-amber-fg: #fbbf24;
+  --dash-icon-amber-bg: rgba(245, 158, 11, 0.15);
+  --dash-icon-blue-fg: #60a5fa;
+  --dash-icon-blue-bg: rgba(59, 130, 246, 0.15);
+  --dash-icon-emerald-fg: #34d399;
+  --dash-icon-emerald-bg: rgba(16, 185, 129, 0.15);
+  --dash-badge-neutral-bg: rgba(51, 65, 85, 0.5);
+  --dash-badge-neutral-fg: #cbd5e1;
+  --dash-badge-neutral-border: #475569;
 }
 
 html[data-dashboard-app][data-theme="dark"] body {
@@ -335,6 +355,47 @@ input.ui-time::-webkit-outer-spin-button {
 }
 
 @layer components {
+  .dash-card.dash-feature-card {
+    border-color: color-mix(in srgb, var(--accent) 22%, var(--surface-light-border));
+    background: linear-gradient(135deg, var(--surface-light-card) 0%, var(--accent-muted) 100%);
+  }
+
+  .dash-btn-outline {
+    border-radius: 0.5rem;
+    border: 1px solid var(--surface-light-border);
+    background: var(--surface-light-card);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--surface-light-fg);
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .dash-btn-outline:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .dash-stat-icon {
+    color: var(--accent);
+    background: var(--accent-muted);
+  }
+
+  .dash-stat-icon-amber {
+    color: var(--dash-icon-amber-fg);
+    background: var(--dash-icon-amber-bg);
+  }
+
+  .dash-stat-icon-blue {
+    color: var(--dash-icon-blue-fg);
+    background: var(--dash-icon-blue-bg);
+  }
+
+  .dash-stat-icon-emerald {
+    color: var(--dash-icon-emerald-fg);
+    background: var(--dash-icon-emerald-bg);
+  }
+
   .dash-card {
     background: var(--surface-light-card);
     border: 1px solid var(--surface-light-border);

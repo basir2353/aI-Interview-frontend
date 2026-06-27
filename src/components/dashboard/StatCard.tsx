@@ -18,7 +18,7 @@ export function StatCard({
   value,
   hint,
   icon: Icon,
-  iconColor = 'text-[var(--accent)] bg-[var(--accent-muted)]',
+  iconColor = 'dash-stat-icon',
   href,
   onClick,
   className,
