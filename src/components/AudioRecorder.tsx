@@ -7,6 +7,9 @@ export interface AudioRecorderHandle {
   toggle: () => void;
   start: () => void;
   stop: () => void;
+  /** Stop mic without sending audio for transcription (manual mute). */
+  cancel: () => void;
+  warmUp: () => Promise<boolean>;
   listening: boolean;
 }
 
@@ -17,22 +20,13 @@ interface AudioRecorderProps {
   autoStart?: boolean;
   onListeningChange?: (listening: boolean) => void;
   hideButton?: boolean;
-  /** Silence duration (ms) before auto-stop. Longer = wait for user to finish speaking. Default 1300. */
   silenceMs?: number;
-  /** Min record time (ms) before silence can trigger stop. Default 900. */
   minRecordMs?: number;
-  /** Only allow silence to stop after at least this much speech (ms). Default 0. */
   minSpeechMs?: number;
-  /** Max record duration (ms). Default 20000. */
   maxRecordMs?: number;
-  /** Delay (ms) after silence before stopping, to capture trailing words. Default 250. */
   stopDelayMs?: number;
 }
 
-/**
- * Voice input: records mic audio, converts to 16k mono WAV, and sends to backend
- * via POST /api/transcribe (whisper.cpp).
- */
 export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(function AudioRecorder(
   {
     onTranscript,
@@ -49,32 +43,31 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
   },
   ref
 ) {
-  const { start: startVoice, stop: stopVoice, isRecording, status, error } = useVoiceRecorder({
-    maxRecordMs: maxRecordMsProp ?? 20000,
-    autoStopOnSilence: true,
-    silenceMs: silenceMsProp ?? 1300,
-    stopDelayMs: stopDelayMsProp ?? 250,
-    minRecordMs: minRecordMsProp ?? 900,
-    minSpeechMs: minSpeechMsProp ?? 0,
-    onTranscript: (text) => {
-      onTranscript(text);
-    },
-    onError: (message, details) => {
-      console.error('[AudioRecorder] Voice pipeline error:', message, details);
-      if (/permission/i.test(message)) {
-        alert('Could not access microphone. Please check your browser permissions.');
-      }
-      onNoSpeech?.();
-    },
-  });
+  const { start: startVoice, stop: stopVoice, cancel: cancelVoice, warmUp, isRecording, status, error } =
+    useVoiceRecorder({
+      maxRecordMs: maxRecordMsProp ?? 120000,
+      autoStopOnSilence: true,
+      silenceMs: silenceMsProp ?? 2200,
+      stopDelayMs: stopDelayMsProp ?? 180,
+      minRecordMs: minRecordMsProp ?? 600,
+      minSpeechMs: minSpeechMsProp ?? 400,
+      onTranscript: (text) => {
+        onTranscript(text);
+      },
+      onError: (message, details) => {
+        console.error('[AudioRecorder] Voice pipeline error:', message, details);
+        if (/permission/i.test(message)) {
+          alert('Could not access microphone. Please check your browser permissions.');
+        }
+        onNoSpeech?.();
+      },
+    });
 
   const toggle = useCallback(() => {
     if (disabled) return;
     if (isRecording) {
-      console.log('[AudioRecorder] User toggled mute');
       stopVoice();
     } else {
-      console.log('[AudioRecorder] User toggled unmute');
       void startVoice();
     }
   }, [disabled, isRecording, startVoice, stopVoice]);
@@ -89,6 +82,10 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     stopVoice();
   }, [isRecording, stopVoice]);
 
+  const cancel = useCallback(() => {
+    cancelVoice();
+  }, [cancelVoice]);
+
   useEffect(() => {
     if (autoStart && !disabled && !isRecording) {
       void startVoice();
@@ -99,7 +96,11 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     onListeningChange?.(isRecording);
   }, [isRecording, onListeningChange]);
 
-  useImperativeHandle(ref, () => ({ toggle, start, stop, listening: isRecording }), [toggle, start, stop, isRecording]);
+  useImperativeHandle(
+    ref,
+    () => ({ toggle, start, stop, cancel, warmUp, listening: isRecording }),
+    [toggle, start, stop, cancel, warmUp, isRecording]
+  );
 
   if (hideButton) return null;
 
@@ -110,10 +111,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
       disabled={disabled}
       className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50"
     >
-      <span
-        className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-slate-500'
-          }`}
-      />
+      <span className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-slate-500'}`} />
       {isRecording ? 'Mic on' : 'Mic off'}
       {status === 'processing' && <span className="text-xs text-slate-500">(processing)</span>}
       {error && <span className="text-xs text-rose-400">(error)</span>}

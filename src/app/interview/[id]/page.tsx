@@ -17,6 +17,7 @@ import { speakInterviewerText } from '@/lib/interviewerSpeech';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
+import { InterviewInstructionsOverlay } from '@/components/interview/InterviewInstructionsOverlay';
 import { motion } from 'framer-motion';
 import { setInterviewRoomOnboarding } from '@/lib/interviewOnboardingGate';
 import { useInterviewImmersiveMode } from '@/hooks/useInterviewImmersiveMode';
@@ -49,7 +50,12 @@ export default function LiveInterviewPage() {
   const [waveMessageShown, setWaveMessageShown] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   /** device-check → instructions (fullscreen notes) → live room */
-  const [roomPhase, setRoomPhase] = useState<'device-check' | 'instructions' | 'live'>('device-check');
+  const [roomPhase, setRoomPhase] = useState<'device-check' | 'instructions' | 'live'>(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage.getItem('interviewBeginLive') === '1') {
+      return 'instructions';
+    }
+    return 'device-check';
+  });
   const [notepadNotes, setNotepadNotes] = useState('');
   /** When true, user has clicked "Open code" so we show Code tab + editor/terminal even if no coding question yet */
   const [codePanelRequested, setCodePanelRequested] = useState(false);
@@ -65,7 +71,7 @@ export default function LiveInterviewPage() {
   /** True once the live UI has painted — intro TTS waits for this. */
   const [liveScreenReady, setLiveScreenReady] = useState(false);
 
-  useInterviewImmersiveMode(roomPhase === 'live');
+  useInterviewImmersiveMode(roomPhase === 'live' || roomPhase === 'instructions');
   useInterviewRoomTheme(true);
 
   const pipelineBusyRef = useRef(false);
@@ -181,7 +187,7 @@ export default function LiveInterviewPage() {
       clearAutoListenTimeout();
       autoListeningRef.current = false;
       noSpeechRetryRef.current = 0;
-      audioRecorderRef.current?.stop();
+      audioRecorderRef.current?.cancel();
       setMicOn(false);
       setVoicePhase('speaking');
     },
@@ -192,7 +198,7 @@ export default function LiveInterviewPage() {
       setTimeout(() => {
         if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current) return;
         startAutoListeningWindow();
-      }, 400);
+      }, 200);
     },
     skipTurnIds,
     lang: interviewLang,
@@ -433,11 +439,19 @@ export default function LiveInterviewPage() {
   };
 
   const handleMicToggle = () => {
-    autoListeningRef.current = false;
-    noSpeechRetryRef.current = 0;
     clearAutoListenTimeout();
-    userMutedRef.current = micOn;
-    audioRecorderRef.current?.toggle();
+    if (micOn) {
+      userMutedRef.current = true;
+      autoListeningRef.current = false;
+      audioRecorderRef.current?.cancel();
+      setMicOn(false);
+      if (voicePhase === 'listening') setVoicePhase('idle');
+      return;
+    }
+    userMutedRef.current = false;
+    noSpeechRetryRef.current = 0;
+    if (loading || pipelineBusyRef.current) return;
+    startAutoListeningWindow();
   };
 
   const handleCameraToggle = () => {
@@ -475,21 +489,7 @@ export default function LiveInterviewPage() {
     toast.success('Screen share ended');
   }, []);
 
-  const advanceFromDeviceCheck = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
-    stopSpeaking();
-    void handleStartScreenShare();
-    if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
-      void document.documentElement.requestFullscreen().catch(() => {});
-    }
-    introPipelineRanRef.current = false;
-    setLiveScreenReady(false);
-    setRoomPhase('live');
-  }, [stopSpeaking, handleStartScreenShare]);
-
-  const beginLiveInterview = useCallback(() => {
+  const enterInstructionsPhase = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -497,25 +497,44 @@ export default function LiveInterviewPage() {
     clearAutoListenTimeout();
     autoListeningRef.current = false;
     noSpeechRetryRef.current = 0;
-    audioRecorderRef.current?.stop();
+    audioRecorderRef.current?.cancel();
     setMicOn(false);
     introPipelineRanRef.current = false;
     setLiveScreenReady(false);
-    void handleStartScreenShare();
-    setTimeout(() => {
-      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
-        void document.documentElement.requestFullscreen().catch(() => {});
-      }
-    }, 80);
+    setRoomPhase('instructions');
+  }, [stopSpeaking, clearAutoListenTimeout]);
+
+  const enterLiveRoom = useCallback(() => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    stopSpeaking();
+    introPipelineRanRef.current = false;
+    setLiveScreenReady(false);
+    void audioRecorderRef.current?.warmUp?.();
+    if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => {});
+    }
     setRoomPhase('live');
-  }, [stopSpeaking, clearAutoListenTimeout, handleStartScreenShare]);
+  }, [stopSpeaking]);
+
+  const advanceFromDeviceCheck = useCallback(() => {
+    enterInstructionsPhase();
+  }, [enterInstructionsPhase]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.sessionStorage.getItem('interviewBeginLive') !== '1') return;
     window.sessionStorage.removeItem('interviewBeginLive');
-    beginLiveInterview();
-  }, [beginLiveInterview]);
+    if (roomPhase === 'device-check') {
+      enterInstructionsPhase();
+    }
+  }, [enterInstructionsPhase, roomPhase]);
+
+  useEffect(() => {
+    if (roomPhase !== 'instructions') return;
+    void audioRecorderRef.current?.warmUp?.();
+  }, [roomPhase]);
 
   useEffect(() => {
     if (roomPhase !== 'live') {
@@ -529,7 +548,7 @@ export default function LiveInterviewPage() {
         if (cancelled) return;
         timer = setTimeout(() => {
           if (!cancelled) setLiveScreenReady(true);
-        }, 900);
+        }, 400);
       });
     });
     return () => {
@@ -574,7 +593,7 @@ export default function LiveInterviewPage() {
         onStart: () => {
           clearAutoListenTimeout();
           autoListeningRef.current = false;
-          audioRecorderRef.current?.stop();
+          audioRecorderRef.current?.cancel();
           setMicOn(false);
           setVoicePhase('speaking');
           setIntroSpeaking(isIntroBeat);
@@ -611,12 +630,12 @@ export default function LiveInterviewPage() {
           setLiveCaption(segments[i]);
           setIntroSpeaking(isIntroBeat);
           await speakSegment(segments[i], isIntroBeat);
-          await pause(isIntroBeat ? 600 : 350);
+          await pause(isIntroBeat ? 350 : 180);
         }
         if (questionTurn?.content?.trim()) {
           setDisplayQuestion(questionTurn.content.trim());
         }
-        await pause(300);
+        await pause(150);
         finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
       } catch (e) {
         console.error('[Intro] Speech pipeline error', e);
@@ -846,10 +865,59 @@ export default function LiveInterviewPage() {
         onCameraOnChange={setCameraOn}
         cameraVideoRef={cameraVideoRef}
         onVideoReady={onCameraVideoReady}
-        nextLabel="Enter interview room"
+        nextLabel="Continue to interview notes"
       />
     );
   }
+
+  const voiceRecorderNode = (
+    <AudioRecorder
+      ref={audioRecorderRef}
+      onTranscript={handleVoiceTranscript}
+      silenceMs={2200}
+      minRecordMs={600}
+      minSpeechMs={400}
+      maxRecordMs={120000}
+      stopDelayMs={180}
+      onNoSpeech={() => {
+        if (!autoListeningRef.current || !voiceEnabled || loading) return;
+        if (noSpeechRetryRef.current >= 3) {
+          autoListeningRef.current = false;
+          setVoicePhase('idle');
+          setMicOn(false);
+          setError('I could not hear your answer clearly. Please speak a little louder or unmute your mic.');
+          return;
+        }
+        noSpeechRetryRef.current += 1;
+        setError('');
+        setVoicePhase('listening');
+        setTimeout(() => {
+          if (!autoListeningRef.current || loading || !voiceEnabled) return;
+          startAutoListeningWindow();
+        }, 200);
+      }}
+      disabled={loading || roomPhase !== 'live'}
+      autoStart={false}
+      onListeningChange={(listening) => {
+        if (listening) {
+          userMutedRef.current = false;
+          setMicOn(true);
+          setVoicePhase('listening');
+          return;
+        }
+        if (userMutedRef.current || voicePhase === 'speaking') {
+          setMicOn(false);
+          return;
+        }
+        if (pipelineBusyRef.current || loading || autoListeningRef.current) {
+          setMicOn(true);
+          return;
+        }
+        setMicOn(false);
+      }}
+      hideButton
+    />
+  );
 
   const elapsedSeconds = state.startedAt
     ? Math.max(0, Math.floor((nowTs - new Date(state.startedAt).getTime()) / 1000))
@@ -858,6 +926,17 @@ export default function LiveInterviewPage() {
   const seconds = String(elapsedSeconds % 60).padStart(2, '0');
 
   return (
+    <>
+      {roomPhase === 'instructions' ? (
+        <InterviewInstructionsOverlay
+          showCodeTab={showCodeTab}
+          codingTurnActive={false}
+          showNotepadTab={showNotepadTab}
+          interviewLang={interviewLang}
+          onShareScreen={() => void handleStartScreenShare()}
+          onSoundsGood={enterLiveRoom}
+        />
+      ) : (
     <motion.div
       className="fixed inset-0 z-[200] flex flex-col bg-[var(--interview-bg)] text-[var(--interview-fg)]"
       initial={{ opacity: 0 }}
@@ -1345,54 +1424,10 @@ export default function LiveInterviewPage() {
             </svg>
           </button>
         </div>
-
-        <AudioRecorder
-          ref={audioRecorderRef}
-          onTranscript={handleVoiceTranscript}
-          silenceMs={3500}
-          minRecordMs={800}
-          minSpeechMs={500}
-          maxRecordMs={120000}
-          stopDelayMs={200}
-          onNoSpeech={() => {
-            if (!autoListeningRef.current || !voiceEnabled || loading) return;
-            if (noSpeechRetryRef.current >= 3) {
-              autoListeningRef.current = false;
-              setVoicePhase('idle');
-              setMicOn(false);
-              setError('I could not hear your answer clearly. Please speak a little louder or unmute your mic.');
-              return;
-            }
-            noSpeechRetryRef.current += 1;
-            setError('');
-            setVoicePhase('listening');
-            setTimeout(() => {
-              if (!autoListeningRef.current || loading || !voiceEnabled) return;
-              startAutoListeningWindow();
-            }, 400);
-          }}
-          disabled={loading}
-          autoStart={false}
-          onListeningChange={(listening) => {
-            if (listening) {
-              userMutedRef.current = false;
-              setMicOn(true);
-              setVoicePhase('listening');
-              return;
-            }
-            if (userMutedRef.current || voicePhase === 'speaking') {
-              setMicOn(false);
-              return;
-            }
-            if (pipelineBusyRef.current || loading || autoListeningRef.current) {
-              setMicOn(true);
-              return;
-            }
-            setMicOn(false);
-          }}
-          hideButton
-        />
       </div>
     </motion.div>
+      )}
+      {voiceRecorderNode}
+    </>
   );
 }

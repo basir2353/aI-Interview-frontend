@@ -29,8 +29,13 @@ export interface UseVoiceRecorderReturn {
   isRecording: boolean;
   error: string | null;
   requestPermission: () => Promise<boolean>;
+  /** Acquire mic permission and keep a warm stream for faster later starts. */
+  warmUp: () => Promise<boolean>;
   start: () => Promise<void>;
+  /** Stop and transcribe the current clip. */
   stop: () => void;
+  /** Stop recording without transcribing (manual mute). */
+  cancel: () => void;
 }
 
 function pickBestRecorderMimeType(): string | undefined {
@@ -65,6 +70,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const warmStreamRef = useRef<MediaStream | null>(null);
+  const skipTranscribeRef = useRef(false);
   const chunksRef = useRef<BlobPart[]>([]);
   const vadAudioCtxRef = useRef<AudioContext | null>(null);
 
@@ -102,7 +109,19 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     }
   }, []);
 
-  const cleanupStream = useCallback(() => {
+  const audioConstraints: MediaTrackConstraints = {
+    echoCancellation: true,
+    noiseSuppression: false,
+    autoGainControl: true,
+    channelCount: 1,
+  };
+
+  const releaseWarmStream = useCallback(() => {
+    warmStreamRef.current?.getTracks().forEach((t) => t.stop());
+    warmStreamRef.current = null;
+  }, []);
+
+  const cleanupRecorderOnly = useCallback(() => {
     clearVad();
     clearMaxStop();
     const vadCtx = vadAudioCtxRef.current;
@@ -114,18 +133,29 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         // ignore
       }
     }
-    const stream = streamRef.current;
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-    }
-    streamRef.current = null;
     recorderRef.current = null;
+    streamRef.current = null;
   }, [clearMaxStop, clearVad]);
+
+  const cleanupStream = useCallback(() => {
+    cleanupRecorderOnly();
+    releaseWarmStream();
+  }, [cleanupRecorderOnly, releaseWarmStream]);
+
+  const acquireStream = useCallback(async (): Promise<MediaStream> => {
+    if (warmStreamRef.current?.active) {
+      streamRef.current = warmStreamRef.current;
+      return warmStreamRef.current;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    warmStreamRef.current = stream;
+    streamRef.current = stream;
+    return stream;
+  }, []);
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());
+      await acquireStream();
       return true;
     } catch (e) {
       const msg = 'Microphone permission denied or unavailable';
@@ -134,20 +164,47 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       onError?.(msg, e);
       return false;
     }
-  }, [onError]);
+  }, [acquireStream, onError]);
+
+  const warmUp = useCallback(async (): Promise<boolean> => {
+    try {
+      await acquireStream();
+      setStatus('idle');
+      setError(null);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }, [acquireStream]);
 
   const stop = useCallback(() => {
+    skipTranscribeRef.current = false;
     const rec = recorderRef.current;
     if (!rec) return;
     if (rec.state !== 'inactive') {
       try {
-        // Flush last chunk before stop.
         rec.requestData();
       } catch {
         // ignore
       }
       rec.stop();
     }
+  }, []);
+
+  const cancel = useCallback(() => {
+    skipTranscribeRef.current = true;
+    const rec = recorderRef.current;
+    if (!rec || rec.state === 'inactive') {
+      skipTranscribeRef.current = false;
+      setStatus('idle');
+      return;
+    }
+    try {
+      rec.requestData();
+    } catch {
+      // ignore
+    }
+    rec.stop();
   }, []);
 
   const start = useCallback(async () => {
@@ -167,16 +224,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
     let stream: MediaStream;
     try {
-      // Explicit permission request + capture with best browser defaults.
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          // Echo cancel keeps speaker TTS out of the mic; avoid heavy noise gate that clips speech.
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
+      stream = await acquireStream();
     } catch (e) {
       const msg = 'Microphone permission denied or unavailable';
       setStatus('error');
@@ -216,9 +264,18 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     };
 
     recorder.onstop = async () => {
-      setStatus('processing');
       clearVad();
       clearMaxStop();
+
+      if (skipTranscribeRef.current) {
+        skipTranscribeRef.current = false;
+        chunksRef.current = [];
+        setStatus('idle');
+        cleanupRecorderOnly();
+        return;
+      }
+
+      setStatus('processing');
       console.log('[useVoiceRecorder] Recording stopped, processing audio');
 
       const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
@@ -229,7 +286,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         setStatus('error');
         setError(msg);
         onError?.(msg);
-        cleanupStream();
+        cleanupRecorderOnly();
         return;
       }
 
@@ -249,7 +306,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           setStatus('error');
           setError(msg);
           onError?.(msg);
-          cleanupStream();
+          cleanupRecorderOnly();
           return;
         }
 
@@ -262,7 +319,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         setError(msg);
         onError?.(msg, e);
       } finally {
-        cleanupStream();
+        cleanupRecorderOnly();
       }
     };
 
@@ -366,7 +423,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     recorder.start(250);
   }, [
     autoStopOnSilence,
-    cleanupStream,
+    acquireStream,
+    cancel,
+    cleanupRecorderOnly,
     clearMaxStop,
     clearVad,
     maxRecordMs,
@@ -382,6 +441,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
   useEffect(() => {
     return () => {
+      skipTranscribeRef.current = true;
       try {
         stop();
       } catch {
@@ -396,8 +456,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     isRecording: status === 'recording',
     error,
     requestPermission,
+    warmUp,
     start,
     stop,
+    cancel,
   };
 }
 
