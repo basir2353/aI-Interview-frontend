@@ -5,7 +5,7 @@ import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
 
 export interface AudioRecorderHandle {
   toggle: () => void;
-  start: () => void;
+  start: () => Promise<boolean>;
   stop: () => void;
   /** Stop mic without sending audio for transcription (manual mute). */
   cancel: () => void;
@@ -72,9 +72,9 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     }
   }, [disabled, isRecording, startVoice, stopVoice]);
 
-  const start = useCallback(() => {
-    if (disabled || isRecording) return;
-    void startVoice();
+  const start = useCallback(async (): Promise<boolean> => {
+    if (disabled || isRecording) return isRecording;
+    return startVoice();
   }, [disabled, isRecording, startVoice]);
 
   const stop = useCallback(() => {

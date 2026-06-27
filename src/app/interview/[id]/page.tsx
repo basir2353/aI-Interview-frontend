@@ -138,9 +138,27 @@ export default function LiveInterviewPage() {
     if (audioRecorderRef.current?.listening) return;
     clearAutoListenTimeout();
     autoListeningRef.current = true;
-    setMicOn(true);
     setVoicePhase('listening');
-    audioRecorderRef.current?.start();
+
+    const tryStartMic = async (attempt = 0) => {
+      if (!autoListeningRef.current) return;
+      const started = (await audioRecorderRef.current?.start()) ?? false;
+      if (started || audioRecorderRef.current?.listening) {
+        setMicOn(true);
+        return;
+      }
+      if (attempt < 8) {
+        window.setTimeout(() => void tryStartMic(attempt + 1), 350);
+        return;
+      }
+      autoListeningRef.current = false;
+      setMicOn(false);
+      setVoicePhase('idle');
+      setError('Could not open the microphone. Please click the mic button or check browser permissions.');
+    };
+
+    void tryStartMic();
+
     const listenWindowMs = 125000;
     autoListenTimeoutRef.current = setTimeout(() => {
       audioRecorderRef.current?.stop();
@@ -203,6 +221,18 @@ export default function LiveInterviewPage() {
     skipTurnIds,
     lang: interviewLang,
   });
+
+  /** Stable refs for intro pipeline — state updates must not cancel in-flight intro TTS. */
+  const startAutoListeningWindowRef = useRef(startAutoListeningWindow);
+  const clearAutoListenTimeoutRef = useRef(clearAutoListenTimeout);
+  const markTurnSpokenRef = useRef(markTurnSpoken);
+  const syncDisplayQuestionFromStateRef = useRef(syncDisplayQuestionFromState);
+  useEffect(() => {
+    startAutoListeningWindowRef.current = startAutoListeningWindow;
+    clearAutoListenTimeoutRef.current = clearAutoListenTimeout;
+    markTurnSpokenRef.current = markTurnSpoken;
+    syncDisplayQuestionFromStateRef.current = syncDisplayQuestionFromState;
+  }, [startAutoListeningWindow, clearAutoListenTimeout, markTurnSpoken, syncDisplayQuestionFromState]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
@@ -374,7 +404,6 @@ export default function LiveInterviewPage() {
     (text: string) => {
       const cleaned = text.trim();
       if (!cleaned) return;
-      pipelineBusyRef.current = true;
       setMicOn(false);
       setVoicePhase('transcribing');
       setAnswerText(cleaned);
@@ -583,15 +612,15 @@ export default function LiveInterviewPage() {
       setLiveCaption('');
       setVoicePhase('listening');
       userMutedRef.current = false;
-      if (questionTurnId) markTurnSpoken(questionTurnId);
-      startAutoListeningWindow();
+      if (questionTurnId) markTurnSpokenRef.current(questionTurnId);
+      startAutoListeningWindowRef.current();
     };
 
     const speakSegment = async (text: string, isIntroBeat: boolean) => {
       await speakInterviewerText(text, {
         lang: interviewLang,
         onStart: () => {
-          clearAutoListenTimeout();
+          clearAutoListenTimeoutRef.current();
           autoListeningRef.current = false;
           audioRecorderRef.current?.cancel();
           setMicOn(false);
@@ -661,10 +690,10 @@ export default function LiveInterviewPage() {
           if (cancelled) return;
           liveState = res.state;
           setState(res.state);
-          syncDisplayQuestionFromState(res.state);
+          syncDisplayQuestionFromStateRef.current(res.state);
         } else if (liveState) {
           setState(liveState);
-          syncDisplayQuestionFromState(liveState);
+          syncDisplayQuestionFromStateRef.current(liveState);
         }
 
         if (!liveState) {
@@ -686,7 +715,7 @@ export default function LiveInterviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomPhase, liveScreenReady, report, id, interviewLang, markTurnSpoken, startAutoListeningWindow, clearAutoListenTimeout, syncDisplayQuestionFromState]);
+  }, [roomPhase, liveScreenReady, report, id, interviewLang]);
 
   useEffect(() => {
     return () => {
@@ -909,8 +938,9 @@ export default function LiveInterviewPage() {
           setMicOn(false);
           return;
         }
-        if (pipelineBusyRef.current || loading || autoListeningRef.current) {
-          setMicOn(true);
+        if (autoListeningRef.current) {
+          setMicOn(false);
+          setVoicePhase((prev) => (prev === 'listening' ? 'transcribing' : prev));
           return;
         }
         setMicOn(false);

@@ -31,7 +31,7 @@ export interface UseVoiceRecorderReturn {
   requestPermission: () => Promise<boolean>;
   /** Acquire mic permission and keep a warm stream for faster later starts. */
   warmUp: () => Promise<boolean>;
-  start: () => Promise<void>;
+  start: () => Promise<boolean>;
   /** Stop and transcribe the current clip. */
   stop: () => void;
   /** Stop recording without transcribing (manual mute). */
@@ -207,14 +207,14 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     rec.stop();
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (): Promise<boolean> => {
     if (recorderRef.current?.state === 'recording' || recorderRef.current?.state === 'paused') {
       console.log('[useVoiceRecorder] Already recording — skip duplicate start');
-      return;
+      return true;
     }
     if (status === 'processing') {
       console.log('[useVoiceRecorder] Still processing previous clip — skip start');
-      return;
+      return false;
     }
 
     setError(null);
@@ -230,7 +230,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       setStatus('error');
       setError(msg);
       onError?.(msg, e);
-      return;
+      return false;
     }
 
     streamRef.current = stream;
@@ -421,6 +421,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     }, maxRecordMs);
 
     recorder.start(250);
+    return true;
   }, [
     autoStopOnSilence,
     acquireStream,
