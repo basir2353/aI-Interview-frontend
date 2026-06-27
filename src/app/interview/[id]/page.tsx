@@ -12,7 +12,8 @@ import { CodeEditor } from '@/components/CodeEditor';
 import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
-import { waitForSpeechVoices, pickPreferredInterviewerVoice } from '@/lib/voicePreferences';
+import { waitForSpeechVoices } from '@/lib/voicePreferences';
+import { speakInterviewerText } from '@/lib/interviewerSpeech';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
@@ -120,13 +121,13 @@ export default function LiveInterviewPage() {
     const isCodingTurn = Boolean(
       latestAi?.isCodingQuestion || latestAi?.codingStarterCode || latestAi?.codingLanguage
     );
-    if (!voiceEnabled || loading || isCodingTurn) return;
+    if (!voiceEnabled || loading || pipelineBusyRef.current || isCodingTurn) return;
+    if (audioRecorderRef.current?.listening) return;
     clearAutoListenTimeout();
     autoListeningRef.current = true;
     setMicOn(true);
     setVoicePhase('listening');
     audioRecorderRef.current?.start();
-    // Long window so user can finish their full answer before we process (2 min + buffer)
     const listenWindowMs = 125000;
     autoListenTimeoutRef.current = setTimeout(() => {
       audioRecorderRef.current?.stop();
@@ -148,7 +149,7 @@ export default function LiveInterviewPage() {
   const skipTurnIds = manualSpokenAiTurnIds;
   /** No auto-TTS during device-check / instructions — avoids overlap with the post-onboarding intro. */
   const voiceAutoPlayActive = voiceEnabled && roomPhase === 'live';
-  const { stopSpeaking, speakText } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
+  const { stopSpeaking, markTurnSpoken } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
     onAutoSpeakStart: () => {
       clearAutoListenTimeout();
       autoListeningRef.current = false;
@@ -160,15 +161,10 @@ export default function LiveInterviewPage() {
     onAutoSpeakEnd: () => {
       noSpeechRetryRef.current = 0;
       userMutedRef.current = false;
-      const tryStartMic = (attempt = 0) => {
-        if (!voiceEnabled) return;
-        if (loadingRef.current && attempt < 60) {
-          setTimeout(() => tryStartMic(attempt + 1), 250);
-          return;
-        }
-        if (!loadingRef.current) startAutoListeningWindow();
-      };
-      setTimeout(() => tryStartMic(), 220);
+      setTimeout(() => {
+        if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current) return;
+        startAutoListeningWindow();
+      }, 400);
     },
     skipTurnIds,
     lang: interviewLang,
@@ -324,19 +320,23 @@ export default function LiveInterviewPage() {
       setAnswerText('');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to submit');
+      setVoicePhase('idle');
+      if (voiceEnabled) {
+        setTimeout(() => startAutoListeningWindow(), 500);
+      }
     } finally {
       setLoading(false);
-      setVoicePhase('idle');
       pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking]);
+  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       const cleaned = text.trim();
       if (!cleaned) return;
       pipelineBusyRef.current = true;
+      setMicOn(false);
       setVoicePhase('transcribing');
       setAnswerText(cleaned);
       autoListeningRef.current = false;
@@ -523,28 +523,18 @@ export default function LiveInterviewPage() {
 
     const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    const speakLine = (text: string) =>
-      new Promise<void>((resolve) => {
-        if (!window.speechSynthesis) {
-          speakText(text, interviewLang);
-          resolve();
-          return;
-        }
-        const utterance = new SpeechSynthesisUtterance(text.trim());
-        const voices = window.speechSynthesis.getVoices();
-        const voice = pickPreferredInterviewerVoice(voices);
-        if (voice) utterance.voice = voice;
-        utterance.lang = interviewLang || voice?.lang || 'en-US';
-        utterance.rate = 0.94;
-        utterance.pitch = 1.03;
-        utterance.onstart = () => {
-          setVoicePhase('speaking');
+    const speakSegment = async (text: string) => {
+      await speakInterviewerText(text, {
+        lang: interviewLang,
+        onStart: () => {
+          clearAutoListenTimeout();
+          autoListeningRef.current = false;
+          audioRecorderRef.current?.stop();
           setMicOn(false);
-        };
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        window.speechSynthesis.speak(utterance);
+          setVoicePhase('speaking');
+        },
       });
+    };
 
     const runVoiceIntro = async (liveState: InterviewState) => {
       const aiTurns = liveState.turns?.filter((t) => t.role === 'ai') ?? [];
@@ -571,21 +561,7 @@ export default function LiveInterviewPage() {
       const introSegmentCount = introTurns.length >= 1 ? introTurns.length : Math.max(0, segments.length - 1);
 
       setIntroSpeaking(true);
-      if (!window.speechSynthesis) {
-        for (let i = 0; i < segments.length; i++) {
-          if (cancelled) return;
-          setLiveCaption(segments[i]);
-          speakText(segments[i], interviewLang);
-          await pause(i < introSegmentCount ? 900 : 400);
-        }
-        setIntroSpeaking(false);
-        setLiveCaption('');
-        userMutedRef.current = false;
-        startAutoListeningWindow();
-        return;
-      }
       await waitForSpeechVoices();
-      window.speechSynthesis.cancel();
       for (let i = 0; i < segments.length; i++) {
         if (cancelled) return;
         const isIntroBeat = i < introSegmentCount;
@@ -596,12 +572,15 @@ export default function LiveInterviewPage() {
           setIntroSpeaking(false);
           setLiveCaption('');
         }
-        await speakLine(segments[i]);
+        await speakSegment(segments[i]);
         await pause(isIntroBeat ? 750 : 450);
       }
       setIntroSpeaking(false);
       setLiveCaption('');
       userMutedRef.current = false;
+      if (questionTurn) markTurnSpoken(questionTurn.id);
+      else if (aiTurns.length > 0) markTurnSpoken(aiTurns[aiTurns.length - 1].id);
+      await pause(400);
       startAutoListeningWindow();
     };
 
@@ -636,7 +615,7 @@ export default function LiveInterviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [state, report, speakText, interviewLang, startAutoListeningWindow, roomPhase, liveScreenReady, id]);
+  }, [state, report, interviewLang, startAutoListeningWindow, roomPhase, liveScreenReady, id, markTurnSpoken, clearAutoListenTimeout]);
 
   useEffect(() => {
     return () => {
@@ -1323,17 +1302,20 @@ export default function LiveInterviewPage() {
           stopDelayMs={200}
           onNoSpeech={() => {
             if (!autoListeningRef.current || !voiceEnabled || loading) return;
-            if (noSpeechRetryRef.current >= 2) {
+            if (noSpeechRetryRef.current >= 3) {
               autoListeningRef.current = false;
+              setVoicePhase('idle');
+              setMicOn(false);
               setError('I could not hear your answer clearly. Please speak a little louder or unmute your mic.');
               return;
             }
             noSpeechRetryRef.current += 1;
             setError('');
+            setVoicePhase('listening');
             setTimeout(() => {
               if (!autoListeningRef.current || loading || !voiceEnabled) return;
               startAutoListeningWindow();
-            }, 220);
+            }, 400);
           }}
           disabled={loading}
           autoStart={false}

@@ -151,6 +151,15 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   }, []);
 
   const start = useCallback(async () => {
+    if (recorderRef.current?.state === 'recording' || recorderRef.current?.state === 'paused') {
+      console.log('[useVoiceRecorder] Already recording — skip duplicate start');
+      return;
+    }
+    if (status === 'processing') {
+      console.log('[useVoiceRecorder] Still processing previous clip — skip start');
+      return;
+    }
+
     setError(null);
     setStatus('idle');
 
@@ -367,6 +376,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     silenceMs,
     stopDelayMs,
     stop,
+    status,
   ]);
 
   useEffect(() => {

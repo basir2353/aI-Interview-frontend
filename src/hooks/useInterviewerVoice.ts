@@ -1,47 +1,18 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Turn } from '@/types';
-import { pickPreferredInterviewerVoice, waitForSpeechVoices } from '@/lib/voicePreferences';
-
-function pickProfessionalVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  if (!voices.length) return null;
-  return pickPreferredInterviewerVoice(voices);
-}
-
-/** Speak text using the browser's SpeechSynthesis (works without backend TTS). */
-async function speakWithBrowser(
-  text: string,
-  onStart?: () => void,
-  onEnd?: () => void,
-  lang?: string
-) {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  const voices = await waitForSpeechVoices();
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  const selectedVoice = pickProfessionalVoice(voices);
-  utterance.voice = selectedVoice;
-  utterance.lang = lang || selectedVoice?.lang || 'en-US';
-  utterance.rate = 0.96;
-  utterance.pitch = 1.03;
-  utterance.volume = 1.0;
-  utterance.onstart = () => onStart?.();
-  utterance.onend = () => onEnd?.();
-  utterance.onerror = () => onEnd?.();
-  window.speechSynthesis.speak(utterance);
-}
+import { cancelInterviewerSpeech, speakInterviewerText } from '@/lib/interviewerSpeech';
 
 interface UseInterviewerVoiceOptions {
   onAutoSpeakStart?: () => void;
   onAutoSpeakEnd?: () => void;
-  /** Turn IDs to skip (e.g. first turn when page speaks it after voice instructions). */
+  /** Turn IDs to skip (e.g. intro + first question spoken manually on live entry). */
   skipTurnIds?: Set<string> | null;
-  /** Language code for TTS (e.g. 'en-US', 'es', 'fr'). */
   lang?: string;
 }
 
 /**
- * Speaks the AI interviewer's questions and responses aloud.
- * Exposes speakText() so the UI can play a question on click or after voice instructions.
+ * Speaks new AI interviewer turns after intro. Exposes markTurnSpoken so the
+ * intro sequence can register turns already delivered out-of-band.
  */
 export function useInterviewerVoice(
   turns: Turn[] | undefined,
@@ -49,8 +20,8 @@ export function useInterviewerVoice(
   options?: UseInterviewerVoiceOptions
 ) {
   const lastSpokenTurnId = useRef<string | null>(null);
-  const onAutoSpeakStartRef = useRef<(() => void) | undefined>(options?.onAutoSpeakStart);
-  const onAutoSpeakEndRef = useRef<(() => void) | undefined>(options?.onAutoSpeakEnd);
+  const onAutoSpeakStartRef = useRef(options?.onAutoSpeakStart);
+  const onAutoSpeakEndRef = useRef(options?.onAutoSpeakEnd);
   const skipTurnIds = options?.skipTurnIds;
   const lang = options?.lang;
 
@@ -59,24 +30,33 @@ export function useInterviewerVoice(
     onAutoSpeakEndRef.current = options?.onAutoSpeakEnd;
   }, [options?.onAutoSpeakStart, options?.onAutoSpeakEnd]);
 
-  useEffect(() => {
-    void waitForSpeechVoices();
-  }, []);
-
   const stopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    cancelInterviewerSpeech();
   }, []);
 
-  /** Speak a specific text (optional lang for multi-language). */
+  const markTurnSpoken = useCallback((turnId: string) => {
+    lastSpokenTurnId.current = turnId;
+  }, []);
+
   const speakText = useCallback(
     (text: string, language?: string) => {
       if (!text?.trim()) return;
-      stopSpeaking();
-      void speakWithBrowser(text, undefined, undefined, language || lang);
+      void speakInterviewerText(text, { lang: language || lang });
     },
-    [stopSpeaking, lang]
+    [lang]
+  );
+
+  /** Speak a specific AI turn and invoke pipeline callbacks. */
+  const speakTurn = useCallback(
+    async (text: string) => {
+      if (!text.trim()) return;
+      await speakInterviewerText(text, {
+        lang,
+        onStart: () => onAutoSpeakStartRef.current?.(),
+        onEnd: () => onAutoSpeakEndRef.current?.(),
+      });
+    },
+    [lang]
   );
 
   useEffect(() => {
@@ -88,29 +68,26 @@ export function useInterviewerVoice(
       return;
     }
 
-    const lastAiTurn = [...turns].reverse().find((t) => t.role === 'ai');
+    const lastAiTurn = [...turns].reverse().find((t) => t.role === 'ai' && !t.isIntro);
     if (!lastAiTurn) return;
     if (lastAiTurn.id === lastSpokenTurnId.current) return;
     if (skipTurnIds?.has(lastAiTurn.id)) return;
 
     lastSpokenTurnId.current = lastAiTurn.id;
-
     const fullText = (lastAiTurn.content || '').trim();
     if (!fullText) return;
 
-    const speak = async () => {
-      stopSpeaking();
-      await speakWithBrowser(
-        fullText,
-        onAutoSpeakStartRef.current,
-        onAutoSpeakEndRef.current,
-        lang
-      );
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      void speakTurn(fullText);
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
     };
+  }, [turns, voiceEnabled, stopSpeaking, skipTurnIds, speakTurn]);
 
-    const t = setTimeout(speak, 220);
-    return () => clearTimeout(t);
-  }, [turns, voiceEnabled, stopSpeaking, skipTurnIds, lang]);
-
-  return { stopSpeaking, speakText };
+  return { stopSpeaking, speakText, speakTurn, markTurnSpoken };
 }
