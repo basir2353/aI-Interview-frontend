@@ -10,9 +10,16 @@ export function cancelInterviewerSpeech(): void {
   }
 }
 
+/** Estimate how long TTS should take (ms) so we can recover if onend never fires. */
+function estimateSpeechDurationMs(text: string): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(3500, Math.min(90000, words * 450 + 1000));
+}
+
 /**
  * Speak interviewer text and resolve when finished (or cancelled).
  * Uses a generation counter so stale onend handlers cannot open the mic late.
+ * Includes Chrome workarounds: resume() poll + timeout fallback when onend is lost.
  */
 export async function speakInterviewerText(
   text: string,
@@ -29,7 +36,7 @@ export async function speakInterviewerText(
   }
 
   const generation = ++speakGeneration;
-  if (typeof window !== 'undefined' && window.speechSynthesis) {
+  if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
 
@@ -42,11 +49,32 @@ export async function speakInterviewerText(
   await waitForSpeechVoices();
 
   return new Promise<void>((resolve) => {
-    const finish = () => {
-      if (generation !== speakGeneration) return;
+    let settled = false;
+    let resumeInterval: ReturnType<typeof setInterval> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const done = () => {
+      if (settled || generation !== speakGeneration) return;
+      settled = true;
+      if (resumeInterval) clearInterval(resumeInterval);
+      if (timeoutId) clearTimeout(timeoutId);
       options?.onEnd?.();
       resolve();
     };
+
+    // Chrome often pauses the speech queue mid-utterance — keep it alive.
+    resumeInterval = setInterval(() => {
+      if (generation !== speakGeneration) return;
+      const synth = window.speechSynthesis;
+      if (synth.paused) synth.resume();
+    }, 800);
+
+    timeoutId = setTimeout(() => {
+      if (generation !== speakGeneration || settled) return;
+      console.warn('[TTS] Utterance timeout — advancing pipeline', { preview: trimmed.slice(0, 72) });
+      window.speechSynthesis.cancel();
+      done();
+    }, estimateSpeechDurationMs(trimmed));
 
     const utterance = new SpeechSynthesisUtterance(trimmed);
     const voices = window.speechSynthesis.getVoices();
@@ -59,8 +87,8 @@ export async function speakInterviewerText(
       if (generation !== speakGeneration) return;
       options?.onStart?.();
     };
-    utterance.onend = finish;
-    utterance.onerror = finish;
+    utterance.onend = done;
+    utterance.onerror = done;
     window.speechSynthesis.speak(utterance);
   });
 }

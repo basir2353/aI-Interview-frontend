@@ -85,8 +85,14 @@ export default function LiveInterviewPage() {
   const cameraAnalysisFrameRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
   const lastCodingQuestionIdRef = useRef<string | null>(null);
   const endedByUnloadRef = useRef(false);
-  const hasRunStartPromptRef = useRef(false);
+  const introPipelineRanRef = useRef(false);
   const loadingRef = useRef(false);
+
+  useEffect(() => {
+    if (roomPhase !== 'live') {
+      introPipelineRanRef.current = false;
+    }
+  }, [roomPhase]);
 
   useEffect(() => {
     loadingRef.current = loading;
@@ -478,7 +484,7 @@ export default function LiveInterviewPage() {
     if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
       void document.documentElement.requestFullscreen().catch(() => {});
     }
-    hasRunStartPromptRef.current = false;
+    introPipelineRanRef.current = false;
     setLiveScreenReady(false);
     setRoomPhase('live');
   }, [stopSpeaking, handleStartScreenShare]);
@@ -493,7 +499,7 @@ export default function LiveInterviewPage() {
     noSpeechRetryRef.current = 0;
     audioRecorderRef.current?.stop();
     setMicOn(false);
-    hasRunStartPromptRef.current = false;
+    introPipelineRanRef.current = false;
     setLiveScreenReady(false);
     void handleStartScreenShare();
     setTimeout(() => {
@@ -541,14 +547,26 @@ export default function LiveInterviewPage() {
     };
   }, [screenStream]);
 
-  // Live room: wait until the screen is visible, deliver welcome via API, then speak intro + first question.
+  // Live room: deliver welcome once, speak all intro beats + Q1, then open mic.
+  // Do NOT list `state` in deps — setState during begin-live must not cancel this pipeline.
   useEffect(() => {
-    if (roomPhase !== 'live' || !liveScreenReady) return;
-    if (!state || report || hasRunStartPromptRef.current || typeof window === 'undefined') return;
+    if (roomPhase !== 'live' || !liveScreenReady || report || typeof window === 'undefined') return;
+    if (introPipelineRanRef.current) return;
+    introPipelineRanRef.current = true;
 
     let cancelled = false;
 
     const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    const finishIntroAndOpenMic = (questionTurnId?: string) => {
+      if (cancelled) return;
+      setIntroSpeaking(false);
+      setLiveCaption('');
+      setVoicePhase('listening');
+      userMutedRef.current = false;
+      if (questionTurnId) markTurnSpoken(questionTurnId);
+      startAutoListeningWindow();
+    };
 
     const speakSegment = async (text: string, isIntroBeat: boolean) => {
       await speakInterviewerText(text, {
@@ -577,69 +595,70 @@ export default function LiveInterviewPage() {
             ? [aiTurns[0].content.trim(), ...(aiTurns[1]?.content?.trim() ? [aiTurns[1].content.trim()] : [])]
             : [];
 
-      console.log('[Intro] Speaking segments', {
-        segmentCount: segments.length,
-        introBeats: introTurns.length,
-        preview: segments.map((s) => s.slice(0, 70)),
-      });
-
       if (segments.length === 0) {
-        hasRunStartPromptRef.current = false;
+        finishIntroAndOpenMic(questionTurn?.id);
         return;
       }
 
       const introSegmentCount = introTurns.length >= 1 ? introTurns.length : Math.max(0, segments.length - 1);
 
-      setIntroSpeaking(true);
-      await waitForSpeechVoices();
-      for (let i = 0; i < segments.length; i++) {
-        if (cancelled) return;
-        const isIntroBeat = i < introSegmentCount;
-        if (isIntroBeat) {
-          setIntroSpeaking(true);
+      try {
+        setIntroSpeaking(true);
+        await waitForSpeechVoices();
+        for (let i = 0; i < segments.length; i++) {
+          if (cancelled) return;
+          const isIntroBeat = i < introSegmentCount;
           setLiveCaption(segments[i]);
-        } else {
-          setIntroSpeaking(false);
-          setLiveCaption('');
+          setIntroSpeaking(isIntroBeat);
+          await speakSegment(segments[i], isIntroBeat);
+          await pause(isIntroBeat ? 600 : 350);
         }
-        await speakSegment(segments[i], isIntroBeat);
-        await pause(isIntroBeat ? 750 : 450);
+        if (questionTurn?.content?.trim()) {
+          setDisplayQuestion(questionTurn.content.trim());
+        }
+        await pause(300);
+        finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
+      } catch (e) {
+        console.error('[Intro] Speech pipeline error', e);
+        finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
       }
-      setIntroSpeaking(false);
-      setLiveCaption('');
-      if (questionTurn?.content?.trim()) {
-        setDisplayQuestion(questionTurn.content.trim());
-      }
-      userMutedRef.current = false;
-      if (questionTurn) markTurnSpoken(questionTurn.id);
-      else if (aiTurns.length > 0) markTurnSpoken(aiTurns[aiTurns.length - 1].id);
-      await pause(400);
-      startAutoListeningWindow();
     };
 
     const beginAndSpeak = async () => {
-      hasRunStartPromptRef.current = true;
       try {
+        let liveState: InterviewState | null = null;
+        try {
+          liveState = await api.getState(id);
+        } catch {
+          liveState = null;
+        }
+
         const needsWelcome =
-          !state.welcomeDelivered ||
-          !state.turns.some((t) => t.role === 'ai' && t.isIntro);
-        let liveState = state;
+          !liveState?.welcomeDelivered ||
+          !liveState?.turns.some((t) => t.role === 'ai' && t.isIntro);
+
         if (needsWelcome) {
-          console.log('[Intro] Calling begin-live API…');
           const res = await api.beginLiveInterview(id);
           if (cancelled) return;
           liveState = res.state;
           setState(res.state);
-          console.log('[Intro] begin-live response', {
-            alreadyDelivered: res.alreadyDelivered,
-            firstIntro: res.firstIntro?.slice(0, 80),
-            introBeats: res.state.turns.filter((t) => t.role === 'ai' && t.isIntro).length,
-          });
+          syncDisplayQuestionFromState(res.state);
+        } else if (liveState) {
+          setState(liveState);
+          syncDisplayQuestionFromState(liveState);
         }
+
+        if (!liveState) {
+          console.error('[Intro] No interview state available');
+          introPipelineRanRef.current = false;
+          return;
+        }
+
         await runVoiceIntro(liveState);
       } catch (e) {
         console.error('[Intro] Failed to begin live interview', e);
-        hasRunStartPromptRef.current = false;
+        introPipelineRanRef.current = false;
+        if (!cancelled) finishIntroAndOpenMic();
       }
     };
 
@@ -648,7 +667,7 @@ export default function LiveInterviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [state, report, interviewLang, startAutoListeningWindow, roomPhase, liveScreenReady, id, markTurnSpoken, clearAutoListenTimeout]);
+  }, [roomPhase, liveScreenReady, report, id, interviewLang, markTurnSpoken, startAutoListeningWindow, clearAutoListenTimeout, syncDisplayQuestionFromState]);
 
   useEffect(() => {
     return () => {
