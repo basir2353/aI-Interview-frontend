@@ -2,9 +2,18 @@ export interface TranscribeResponse {
   transcript: string;
 }
 
-export async function transcribeAudio(file: Blob): Promise<TranscribeResponse> {
+function filenameForBlob(blob: Blob): string {
+  const type = (blob.type || '').toLowerCase();
+  if (type.includes('webm')) return 'recording.webm';
+  if (type.includes('ogg')) return 'recording.ogg';
+  if (type.includes('mp4') || type.includes('aac') || type.includes('mpeg')) return 'recording.mp4';
+  if (type.includes('wav')) return 'recording.wav';
+  return 'recording.webm';
+}
+
+export async function transcribeAudio(file: Blob, filename?: string): Promise<TranscribeResponse> {
   const formData = new FormData();
-  formData.append('audio', file, 'uploaded.wav');
+  formData.append('audio', file, filename || filenameForBlob(file));
 
   const response = await fetch('/api/transcribe', {
     method: 'POST',

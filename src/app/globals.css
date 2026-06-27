@@ -73,6 +73,32 @@ body.interview-immersive [data-site-header] {
   display: none !important;
 }
 
+/* Interview room — fixed dark palette, independent of site theme toggle */
+[data-interview-room='true'] {
+  --interview-bg: #0f0d18;
+  --interview-fg: #f5f3ff;
+  --interview-muted: rgba(196, 181, 253, 0.72);
+  --interview-border: rgba(139, 92, 246, 0.28);
+  --interview-card: rgba(26, 22, 37, 0.96);
+  --interview-accent: #8b5cf6;
+  --interview-accent-muted: rgba(139, 92, 246, 0.18);
+  --interview-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+
+  --surface-light: #1a1625;
+  --surface-light-fg: #f5f3ff;
+  --surface-light-fg-heading: #f5f3ff;
+  --surface-light-muted: rgba(196, 181, 253, 0.78);
+  --surface-light-muted-soft: rgba(196, 181, 253, 0.62);
+  --surface-light-border: rgba(139, 92, 246, 0.28);
+  --surface-light-card: rgba(30, 27, 75, 0.92);
+  --surface-light-input: rgba(26, 22, 37, 0.95);
+}
+
+[data-interview-room='true'] body {
+  background: var(--interview-bg);
+  color: var(--interview-fg);
+}
+
 /* Explicit dark theme (when user selects dark) — surfaces match :root */
 [data-theme="dark"] {
   --surface-light: #1a1625;
@@ -83,6 +109,15 @@ body.interview-immersive [data-site-header] {
   --surface-light-border: rgba(139, 92, 246, 0.25);
   --surface-light-card: rgba(30, 27, 75, 0.9);
   --surface-light-input: rgba(26, 22, 37, 0.95);
+
+  --interview-bg: #0f0d18;
+  --interview-fg: #f5f3ff;
+  --interview-muted: rgba(196, 181, 253, 0.72);
+  --interview-border: rgba(139, 92, 246, 0.28);
+  --interview-card: rgba(26, 22, 37, 0.96);
+  --interview-accent: #8b5cf6;
+  --interview-accent-muted: rgba(139, 92, 246, 0.18);
+  --interview-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
 body {
@@ -189,7 +224,16 @@ input.ui-time::-webkit-outer-spin-button {
   --surface-light-muted-soft: #6b6580;
   --surface-light-border: rgba(139, 92, 246, 0.18);
   --surface-light-card: #ffffff;
-  --surface-light-input: #ffffff;
+  --surface-light-input: #fff;
+
+  --interview-bg: #f8fafc;
+  --interview-fg: #0f172a;
+  --interview-muted: #475569;
+  --interview-border: #cbd5e1;
+  --interview-card: #ffffff;
+  --interview-accent: #6d28d9;
+  --interview-accent-muted: rgba(109, 40, 217, 0.1);
+  --interview-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 [data-theme="light"] body {

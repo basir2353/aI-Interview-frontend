@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
+import { useInterviewRoomTheme } from '@/hooks/useInterviewRoomTheme';
 
 /**
  * Pre-live room: camera/mic check, then start the interview session and open the live screen.
@@ -19,6 +20,8 @@ export default function InterviewEnterPage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
+
+  useInterviewRoomTheme(true);
 
   const handleContinue = useCallback(async () => {
     if (!token || starting) return;

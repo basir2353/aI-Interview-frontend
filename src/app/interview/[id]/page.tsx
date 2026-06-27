@@ -19,6 +19,7 @@ import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceChec
 import { motion } from 'framer-motion';
 import { setInterviewRoomOnboarding } from '@/lib/interviewOnboardingGate';
 import { useInterviewImmersiveMode } from '@/hooks/useInterviewImmersiveMode';
+import { useInterviewRoomTheme } from '@/hooks/useInterviewRoomTheme';
 import {
   InterviewStatusBar,
   type VoicePipelinePhase,
@@ -63,6 +64,7 @@ export default function LiveInterviewPage() {
   const [liveScreenReady, setLiveScreenReady] = useState(false);
 
   useInterviewImmersiveMode(roomPhase === 'live');
+  useInterviewRoomTheme(true);
 
   const pipelineBusyRef = useRef(false);
   const userMutedRef = useRef(false);
@@ -1212,16 +1214,16 @@ export default function LiveInterviewPage() {
             </div>
           </div>
         ) : (
-          <div className="absolute right-8 top-1/2 w-[400px] max-h-[85vh] -translate-y-1/2 space-y-4 overflow-y-auto">
+          <div className="absolute right-8 top-1/2 w-[400px] max-h-[85vh] -translate-y-1/2 space-y-4 overflow-y-auto rounded-2xl border border-[var(--interview-border)] bg-[var(--interview-card)]/95 p-5 shadow-[var(--interview-shadow)] backdrop-blur-sm">
             {showCodeTab && codingTurnActive && (
               <div className="rounded-xl border border-[var(--accent)]/40 bg-[var(--accent-muted)] px-4 py-3 text-sm text-[var(--surface-light-fg)]">
                 <p className="font-semibold text-[var(--accent)]">Coding problem active</p>
                 <p className="mt-1 text-[var(--surface-light-muted)]">Switch to the <strong>Code</strong> tab to solve the problem.</p>
               </div>
             )}
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
-            <p className="text-[15px] font-medium text-[var(--surface-light-fg)]">{panelLabel}</p>
-            <p className="text-[15px] leading-7 text-[var(--surface-light-fg)] whitespace-pre-wrap">{panelText}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">{interviewerDisplayName}</p>
+            <p className="text-[15px] font-medium text-[var(--interview-fg)]">{panelLabel}</p>
+            <p className="text-[15px] leading-7 text-[var(--interview-fg)] whitespace-pre-wrap">{panelText}</p>
             {lastCandidateTurn?.content && (
               <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-4 py-3 text-sm text-[var(--surface-light-fg)]">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Your last answer (submitted)</p>

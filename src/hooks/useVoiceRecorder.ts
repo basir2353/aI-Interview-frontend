@@ -34,11 +34,11 @@ export interface UseVoiceRecorderReturn {
 }
 
 function pickBestRecorderMimeType(): string | undefined {
-  // We will convert to WAV ourselves; this is just the container we record in.
+  // Prefer webm/opus; backend ffmpeg normalizes any supported container.
   const candidates = [
     'audio/webm;codecs=opus',
-    'audio/ogg;codecs=opus',
     'audio/webm',
+    'audio/ogg;codecs=opus',
     'audio/ogg',
     'audio/mp4',
   ];
@@ -46,93 +46,6 @@ function pickBestRecorderMimeType(): string | undefined {
     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) return t;
   }
   return undefined;
-}
-
-async function encodeWavAsync(blob: Blob): Promise<Blob> {
-  const arrayBuffer = await blob.arrayBuffer();
-
-  const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  try {
-    const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
-
-    const targetRate = 16000;
-    const length = Math.ceil(decoded.duration * targetRate);
-    const offline = new OfflineAudioContext(1, length, targetRate);
-
-    const source = offline.createBufferSource();
-    source.buffer = decoded;
-
-    // Mixdown to mono (average)
-    const splitter = offline.createChannelSplitter(decoded.numberOfChannels);
-    const gain = offline.createGain();
-    gain.gain.value = decoded.numberOfChannels > 0 ? 1 / decoded.numberOfChannels : 1;
-    const merger = offline.createChannelMerger(1);
-
-    source.connect(splitter);
-    for (let ch = 0; ch < decoded.numberOfChannels; ch += 1) {
-      splitter.connect(gain, ch);
-    }
-    gain.connect(merger, 0, 0);
-    merger.connect(offline.destination);
-
-    source.start(0);
-    const rendered = await offline.startRendering();
-
-    const pcm = rendered.getChannelData(0);
-    const wavBuffer = pcmToWavBuffer(pcm, rendered.sampleRate);
-    return new Blob([wavBuffer], { type: 'audio/wav' });
-  } finally {
-    try {
-      await audioCtx.close().catch(() => {});
-    } catch {
-      // ignore
-    }
-  }
-}
-
-function pcmToWavBuffer(samples: Float32Array, sampleRate: number): ArrayBuffer {
-  const bytesPerSample = 2;
-  const blockAlign = bytesPerSample * 1;
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = samples.length * bytesPerSample;
-
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  // RIFF
-  writeAscii(view, 0, 'RIFF');
-  view.setUint32(4, 36 + dataSize, true);
-  writeAscii(view, 8, 'WAVE');
-
-  // fmt
-  writeAscii(view, 12, 'fmt ');
-  view.setUint32(16, 16, true); // PCM fmt chunk size
-  view.setUint16(20, 1, true); // PCM
-  view.setUint16(22, 1, true); // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true); // bits per sample
-
-  // data
-  writeAscii(view, 36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  // PCM samples (16-bit little endian)
-  let offset = 44;
-  for (let i = 0; i < samples.length; i += 1) {
-    const s = Math.max(-1, Math.min(1, samples[i] ?? 0));
-    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    offset += 2;
-  }
-
-  return buffer;
-}
-
-function writeAscii(view: DataView, offset: number, text: string) {
-  for (let i = 0; i < text.length; i += 1) {
-    view.setUint8(offset + i, text.charCodeAt(i));
-  }
 }
 
 export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoiceRecorderReturn {
@@ -311,19 +224,13 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       }
 
       try {
-        const wavBlob = await encodeWavAsync(rawBlob);
-        console.log('[useVoiceRecorder] WAV blob size:', wavBlob.size);
+        const uploadName =
+          recorder.mimeType?.includes('ogg') ? 'recording.ogg'
+          : recorder.mimeType?.includes('mp4') ? 'recording.mp4'
+          : recorder.mimeType?.includes('wav') ? 'recording.wav'
+          : 'recording.webm';
 
-        if (!wavBlob.size) {
-          const msg = 'No audio detected (WAV conversion produced empty file)';
-          setStatus('error');
-          setError(msg);
-          onError?.(msg);
-          cleanupStream();
-          return;
-        }
-
-        const { transcript } = await transcribeAudio(wavBlob);
+        const { transcript } = await transcribeAudio(rawBlob, uploadName);
         const text = (transcript || '').trim();
         console.log('[useVoiceRecorder] Transcript:', text);
 
