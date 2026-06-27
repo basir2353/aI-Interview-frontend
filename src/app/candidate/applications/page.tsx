@@ -1,18 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { AppShell } from '@/components/layout/AppShell';
 import { CandidateSubnav } from '@/components/layout/CandidateSubnav';
+import { CandidateApplicationCard } from '@/components/candidate/CandidateApplicationCard';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type CandidateDashboardApplication } from '@/lib/api';
 
 export default function CandidateApplicationsPage() {
   const router = useRouter();
+  const search = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [applications, setApplications] = useState<CandidateDashboardApplication[]>([]);
+
+  useEffect(() => {
+    if (search.get('submitted') === '1') {
+      toast.success('Application submitted! Check your email and track status here.');
+    }
+  }, [search]);
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('candidateToken') : null;
@@ -63,65 +73,14 @@ export default function CandidateApplicationsPage() {
         {!loading && applications.length === 0 && (
           <Card className="rounded-2xl p-6">
             <p className="text-sm text-[var(--surface-light-muted)]">No applied jobs yet.</p>
+            <Link href="/jobs" className="mt-3 inline-block text-sm font-semibold text-[var(--accent)] hover:underline">
+              Browse open jobs
+            </Link>
           </Card>
         )}
 
         {applications.map((app) => (
-          <Card key={app.id} className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-base font-semibold text-[var(--surface-light-fg)]">
-                  {app.position.title}
-                  {app.position.companyName ? ` • ${app.position.companyName}` : ''}
-                </p>
-                <p className="mt-1 text-sm text-[var(--surface-light-muted)]">{app.position.role}</p>
-                <p className="mt-1 text-xs font-medium text-[var(--surface-light-muted)]">
-                  Applied: {new Date(app.appliedAt).toLocaleString()} • Status: {app.status}
-                </p>
-              </div>
-              {app.resumeUrl && (
-                <a
-                  href={app.resumeUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]"
-                >
-                  View resume
-                </a>
-              )}
-            </div>
-
-            {app.schedule && (
-              <div className="mt-4 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] p-4 text-sm">
-                <p className="font-semibold text-[var(--success-text)]">
-                  Interview {app.schedule.status ? `(${app.schedule.status})` : ''}
-                </p>
-                {app.schedule.scheduledAt && (
-                  <p className="text-[var(--success-text)]">
-                    Scheduled at: {new Date(app.schedule.scheduledAt).toLocaleString()}
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {app.schedule.joinUrl && (
-                    <a
-                      href={app.schedule.joinUrl}
-                      className="rounded-full border border-[var(--success-border)] bg-[var(--surface-light-card)] px-3 py-1.5 text-xs font-semibold text-[var(--success-text)]"
-                    >
-                      Join interview
-                    </a>
-                  )}
-                  {app.schedule.reportUrl && (
-                    <a
-                      href={app.schedule.reportUrl}
-                      className="rounded-full border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-1.5 text-xs font-semibold text-[var(--accent)]"
-                    >
-                      View report
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-          </Card>
+          <CandidateApplicationCard key={app.id} app={app} />
         ))}
       </div>
     </AppShell>

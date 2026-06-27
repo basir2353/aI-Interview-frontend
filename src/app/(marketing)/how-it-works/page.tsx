@@ -4,7 +4,7 @@ import { Reveal } from '@/components/ui/Reveal';
 import { Section } from '@/components/ui/Section';
 
 export const metadata = {
-  title: 'How it works | AI Interviewer',
+  title: 'How it works | Intervion',
   description: 'Learn how candidates take AI interviews and how recruiters get structured reports.',
 };
 

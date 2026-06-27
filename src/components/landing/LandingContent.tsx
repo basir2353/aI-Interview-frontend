@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BarChart3, Briefcase, FileCheck, Sparkles, Users, Zap } from 'lucide-react';
+import { BarChart3, Briefcase, FileCheck, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Section } from '@/components/ui/Section';
 import { AnimatedNumber } from '@/components/landing/AnimatedNumber';
 import { HeroInterviewVisual } from '@/components/landing/HeroInterviewVisual';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { MotionReveal } from './MotionReveal';
+import { ContactForm } from '@/components/landing/ContactForm';
 
 export function LandingContent() {
   const howItWorks = [
@@ -96,13 +98,12 @@ export function LandingContent() {
           {/* Left: copy */}
           <div className="text-center lg:text-left">
             <motion.div
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--landing-border)] bg-[var(--landing-surface)]/80 px-4 py-2 text-sm font-medium text-[var(--landing-muted)] backdrop-blur-sm"
+              className="inline-flex items-center rounded-full border border-[var(--landing-border)] bg-[var(--landing-surface)]/80 px-4 py-2 backdrop-blur-sm"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Sparkles className="h-4 w-4 text-[var(--landing-accent)]" strokeWidth={2} />
-              AI Interviewer
+              <IntervionLogo variant="on-dark" className="h-6" />
             </motion.div>
             <motion.h1
               className="mt-6 font-display text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-5xl xl:text-6xl"
@@ -382,22 +383,9 @@ export function LandingContent() {
           <div className="overflow-hidden rounded-xl border border-[var(--landing-border)] bg-[var(--landing-surface)] px-6 py-16 text-center sm:px-12">
             <h2 className="font-display text-2xl font-semibold text-[var(--landing-text)] sm:text-3xl">Get a demo tailored to your roles</h2>
             <p className="mx-auto mt-4 max-w-2xl text-base text-[var(--landing-muted)] sm:text-lg">
-              Tell us what you're hiring for. We'll show you a structured interview flow and the exact report your team will get.
+              Tell us what you&apos;re hiring for. We&apos;ll show you a structured interview flow and the exact report your team will get.
             </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <a
-                href="mailto:hello@aiinterviewer.com?subject=AI%20Interviewer%20demo%20request"
-                className="inline-flex items-center justify-center rounded-full border border-[var(--landing-muted)] bg-transparent px-5 py-2.5 text-sm font-semibold text-[var(--landing-text)] transition-colors hover:bg-white/5"
-              >
-                hello@aiinterviewer.com
-              </a>
-              <Link
-                href="/#features"
-                className="inline-flex items-center justify-center rounded-full bg-[var(--landing-accent-solid)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--landing-accent)]"
-              >
-                Review features
-              </Link>
-            </div>
+            <ContactForm />
           </div>
         </MotionReveal>
       </Section>

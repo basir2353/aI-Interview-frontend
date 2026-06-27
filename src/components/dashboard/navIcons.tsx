@@ -5,6 +5,7 @@ import {
   FileText,
   LayoutDashboard,
   LayoutTemplate,
+  Mail,
   MessageSquare,
   Shield,
   UserCog,
@@ -22,6 +23,7 @@ export const adminNavIcons: Record<string, LucideIcon> = {
   '/admin/candidates': UserSquare2,
   '/admin/schedules': Calendar,
   '/admin/applications': FileText,
+  '/admin/contact': Mail,
   '/admin/questions': ClipboardList,
   '/admin/interview-layout': LayoutTemplate,
 };

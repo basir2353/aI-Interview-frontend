@@ -2,7 +2,7 @@ import { Section } from '@/components/ui/Section';
 import { FeaturesGrid } from '@/components/landing/FeaturesGrid';
 
 export const metadata = {
-  title: 'Features | AI Interviewer',
+  title: 'Features | Intervion',
   description: 'Technical, behavioral, sales, and customer success interviews with AI evaluation and reports.',
 };
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { api } from '@/lib/api';
 
 type Step = 'email' | 'code' | 'password';
@@ -80,13 +81,8 @@ function ForgotPasswordContent() {
       <div className="w-full max-w-md">
         <Card className="rounded-3xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-8 shadow-lg">
           <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-md">
-              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-              </svg>
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">AI Interviewer</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--surface-light-fg)]">Reset your password</h1>
+            <IntervionLogo className="mb-4 h-10" />
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--surface-light-fg)]">Reset your password</h1>
             <p className="mt-2 text-sm font-medium text-[var(--surface-light-muted)]">
               {step === 'email' && 'Enter your email and we’ll send you a secure reset code.'}
               {step === 'code' && 'Enter the 6-digit code we sent to your email.'}

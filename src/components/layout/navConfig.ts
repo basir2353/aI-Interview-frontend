@@ -30,6 +30,7 @@ export const adminNavItems: NavItem[] = [
   { href: '/admin/candidates', label: 'Candidates' },
   { href: '/admin/schedules', label: 'Schedules' },
   { href: '/admin/applications', label: 'Applications & CVs' },
+  { href: '/admin/contact', label: 'Contact messages' },
   { href: '/admin/questions', label: 'Question bank' },
   { href: '/admin/interview-layout', label: 'Interview screen (UI)', superAdminOnly: true },
 ];

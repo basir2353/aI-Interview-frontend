@@ -3,15 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { api } from '@/lib/api';
 import { clearOtherRoles } from '@/lib/session';
 
 export default function CandidateSignupPage() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search.get('next') || '/jobs';
+  const next = search.get('next') || '/candidate/dashboard';
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,6 +44,7 @@ export default function CandidateSignupPage() {
         localStorage.setItem('candidateName', res.candidate.name ?? '');
         localStorage.setItem('candidateEmail', res.candidate.email ?? '');
       }
+      toast.success('Account created! Check your email for a welcome message.');
       router.push(next);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to sign up');
@@ -55,13 +58,8 @@ export default function CandidateSignupPage() {
       <div className="w-full max-w-2xl">
         <Card className="rounded-3xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-8 shadow-lg">
           <div className="mb-8 flex flex-col items-center text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent)] text-white shadow-md">
-              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">AI Interviewer</p>
-            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--surface-light-fg)]">Create your account</h1>
+            <IntervionLogo className="mb-4 h-10" />
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--surface-light-fg)]">Create your account</h1>
             <p className="mt-2 text-sm font-medium text-[var(--surface-light-muted)]">One profile. Apply to jobs faster and track your applications.</p>
           </div>
           <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={submit}>

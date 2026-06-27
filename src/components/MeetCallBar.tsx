@@ -1,5 +1,7 @@
 'use client';
 
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
+
 interface MeetCallBarProps {
   micOn: boolean;
   onMicToggle: () => void;
@@ -32,7 +34,7 @@ export function MeetCallBar({
       {meetingTitle && (
         <div className="hidden sm:flex items-center gap-2.5 pr-4 border-r border-slate-600/60 mr-1">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-2 ring-emerald-500/30" />
-          <span className="text-slate-300 text-xs font-medium tracking-wide">{meetingTitle}</span>
+          <IntervionLogo variant="on-dark" className="h-5" />
         </div>
       )}
 

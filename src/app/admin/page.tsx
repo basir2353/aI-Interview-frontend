@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Calendar, FileText, Users } from 'lucide-react';
+import {
+  Briefcase,
+  Calendar,
+  FileText,
+  Mail,
+  Users,
+} from 'lucide-react';
 import { api, type AdminOverviewResponse, type AdminScheduleRow } from '@/lib/api';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
@@ -45,7 +51,7 @@ export default function AdminDashboardPage() {
   return (
     <AdminShell title="Dashboard" description="Overview of recruiters, candidates, interviews, and schedules.">
       <div className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
             label="Recruiters"
             value={metrics.recruiters}
@@ -68,6 +74,14 @@ export default function AdminDashboardPage() {
             icon={Calendar}
             iconColor="dash-stat-icon-emerald"
             href="/admin/schedules"
+          />
+          <StatCard
+            label="Contact"
+            value={metrics.newContacts ?? 0}
+            hint="New messages"
+            icon={Mail}
+            iconColor="dash-stat-icon-amber"
+            href="/admin/contact"
           />
           <StatCard
             label="Applications"

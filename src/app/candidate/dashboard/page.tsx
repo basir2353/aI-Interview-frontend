@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/layout/AppShell';
 import { CandidateSubnav } from '@/components/layout/CandidateSubnav';
+import { CandidateInterviewCard } from '@/components/candidate/CandidateApplicationCard';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type CandidateDashboardResponse } from '@/lib/api';
@@ -33,6 +34,8 @@ export default function CandidateDashboardPage() {
       })
       .finally(() => setLoading(false));
   }, [router]);
+
+  const upcoming = data?.applications.filter((app) => app.schedule && app.schedule.status !== 'completed') ?? [];
 
   return (
     <AppShell
@@ -86,6 +89,19 @@ export default function CandidateDashboardPage() {
                 </div>
               </div>
             </Card>
+
+            {upcoming.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-lg font-semibold text-[var(--surface-light-fg)]">Upcoming interviews</h2>
+                {upcoming.map((app) => (
+                  <CandidateInterviewCard
+                    key={app.id}
+                    schedule={app.schedule!}
+                    jobTitle={app.position.title}
+                  />
+                ))}
+              </div>
+            )}
 
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 md:grid-cols-3">
               <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 sm:p-5">

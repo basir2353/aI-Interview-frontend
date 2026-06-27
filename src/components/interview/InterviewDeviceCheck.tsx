@@ -105,7 +105,7 @@ export function InterviewDeviceCheck({
           isLight ? 'border-[var(--surface-light-border)] bg-[var(--surface-light-card)]/80' : 'border-white/10'
         }`}
       >
-        <IntervionLogo className="mb-3 h-8" />
+        <IntervionLogo className="mb-3 h-8" variant={isLight ? 'on-light' : 'on-dark'} />
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Check your camera &amp; microphone</h1>
         <p className={`mt-2 max-w-xl text-sm ${isLight ? 'text-[var(--surface-light-muted)]' : 'text-white/60'}`}>
           We&apos;ll use your mic for answers and your camera for a comfortable, natural interview. Adjust lighting if needed, then continue.

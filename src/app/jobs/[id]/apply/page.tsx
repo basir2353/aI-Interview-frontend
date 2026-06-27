@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -83,7 +84,7 @@ export default function ApplyJobPage() {
     setError('');
     setSubmitLoading(true);
     try {
-      await api.publicApplyToJob(jobId, {
+      const res = await api.publicApplyToJob(jobId, {
         name,
         email,
         phone: phone || undefined,
@@ -93,7 +94,12 @@ export default function ApplyJobPage() {
         resumeUrl: uploadedResumeUrl,
         coverLetter: coverLetter || undefined,
       });
-      router.push('/jobs');
+      if (res.interviewScheduled) {
+        toast.success('Application submitted! Your interview is scheduled — check your email.');
+      } else {
+        toast.success('Application submitted! We emailed you a confirmation.');
+      }
+      router.push('/candidate/applications?submitted=1');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to submit application');
     } finally {

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { pickPreferredInterviewerVoice, waitForSpeechVoices } from '@/lib/voicePreferences';
 import { useVoiceRecorder } from '@/hooks/useVoiceRecorder';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 
 const API_BASE = '/api/proxy';
 
@@ -147,7 +148,7 @@ export function VoiceLoopInterview({ role }: VoiceLoopInterviewProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-6">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold mb-2">Intervion — Voice Interview</h1>
+        <IntervionLogo variant="on-dark" className="mb-4 h-8" />
         <p className="text-slate-400 text-sm mb-6">
           AI asks a question → you answer with your voice → next question. Loop continues.
         </p>

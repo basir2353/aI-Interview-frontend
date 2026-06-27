@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { BRAND_NAME, LOGO } from '@/lib/brand';
 
 type IntervionLogoProps = {
   className?: string;
@@ -10,22 +11,22 @@ export function IntervionLogo({ className, variant = 'auto' }: IntervionLogoProp
   const imgClass = cn('h-8 w-auto max-w-[140px] object-contain object-left', className);
 
   if (variant === 'on-light') {
-    return <img src="/dark_logo.png" alt="Intervion" className={imgClass} />;
+    return <img src={LOGO.dark} alt={BRAND_NAME} className={imgClass} />;
   }
 
   if (variant === 'on-dark') {
-    return <img src="/white_logo.png" alt="Intervion" className={imgClass} />;
+    return <img src={LOGO.white} alt={BRAND_NAME} className={imgClass} />;
   }
 
   return (
     <span className="inline-flex shrink-0 items-center">
       <img
-        src="/white_logo.png"
-        alt="Intervion"
+        src={LOGO.white}
+        alt={BRAND_NAME}
         className={cn('intervion-logo-on-dark', imgClass)}
       />
       <img
-        src="/dark_logo.png"
+        src={LOGO.dark}
         alt=""
         aria-hidden
         className={cn('intervion-logo-on-light', imgClass)}

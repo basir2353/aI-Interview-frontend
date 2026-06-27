@@ -307,6 +307,45 @@ export const api = {
     });
   },
 
+  submitContactForm(body: {
+    name: string;
+    email: string;
+    company?: string;
+    subject?: string;
+    message: string;
+  }) {
+    return request<{ ok: boolean; id: string; message: string; emailSent?: boolean }>('/public/contact', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  adminGetContactSubmissions(params?: { status?: string; source?: string }) {
+    const search = new URLSearchParams();
+    if (params?.status) search.set('status', params.status);
+    if (params?.source) search.set('source', params.source);
+    const qs = search.toString();
+    return request<{ submissions: ContactSubmissionRow[] }>(
+      `/admin/contact-submissions${qs ? `?${qs}` : ''}`,
+      { headers: adminAuthHeaders() }
+    );
+  },
+
+  adminUpdateContactSubmission(id: string, status: ContactSubmissionRow['status']) {
+    return request<{ submission: ContactSubmissionRow }>(`/admin/contact-submissions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+      headers: adminAuthHeaders(),
+    });
+  },
+
+  adminSyncResendInbox() {
+    return request<{ ok: boolean; imported: number; skipped: number }>('/admin/contact-submissions/sync-resend', {
+      method: 'POST',
+      headers: adminAuthHeaders(),
+    });
+  },
+
   recruiterLogin(email: string, password: string) {
     return request<{ token: string; recruiter: RecruiterIdentity }>('/recruiter/login', {
       method: 'POST',
@@ -424,7 +463,13 @@ export const api = {
       portfolioUrl?: string;
     }
   ) {
-    return request<{ application: PublicApplication }>(`/public/jobs/${positionId}/apply`, {
+    return request<{
+      application: PublicApplication;
+      interviewScheduled?: boolean;
+      scheduledAt?: string | null;
+      joinUrl?: string | null;
+      emailsSent?: { application: boolean; interview: boolean };
+    }>(`/public/jobs/${positionId}/apply`, {
       method: 'POST',
       body: JSON.stringify(body),
       headers: candidateAuthHeaders(),
@@ -846,8 +891,26 @@ export interface AdminOverviewResponse {
     recruiters: number;
     candidates: number;
     interviews: number;
+    newContacts?: number;
   };
   latestSchedules: AdminOverviewSchedule[];
+}
+
+export interface ContactSubmissionRow {
+  id: string;
+  source: 'form' | 'resend_inbound';
+  status: 'new' | 'read' | 'replied' | 'archived';
+  name: string | null;
+  email: string;
+  company: string | null;
+  subject: string | null;
+  message: string;
+  resend_email_id: string | null;
+  resend_outbound_id: string | null;
+  attachments: unknown;
+  metadata: unknown;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PublicJoinInfo {

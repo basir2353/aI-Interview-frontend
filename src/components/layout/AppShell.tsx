@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { useTheme } from '@/context/ThemeContext';
 
 interface AppShellProps {
@@ -40,6 +41,9 @@ export function AppShell({
       <main className="container mx-auto max-w-7xl px-3 py-6 sm:px-4 sm:py-8 lg:px-8">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-4 sm:mb-6">
           <div className="min-w-0">
+            <Link href="/" className="mb-3 inline-flex">
+              <IntervionLogo className="h-7" />
+            </Link>
             {backHref && (
               <Link
                 href={backHref}

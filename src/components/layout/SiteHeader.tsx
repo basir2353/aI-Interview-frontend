@@ -217,7 +217,14 @@ export function SiteHeader() {
       );
     }
     if (candidateLoggedIn) {
-      return renderUserMenu('candidate', candidateName || 'Account');
+      return (
+        <div className="flex items-center gap-2">
+          <Link href="/candidate/applications" className="rounded-md px-3 py-2 text-sm font-medium text-[var(--landing-muted)] transition-colors hover:text-[var(--landing-text)] hover:bg-white/5">
+            My applications
+          </Link>
+          {renderUserMenu('candidate', candidateName || 'Account')}
+        </div>
+      );
     }
     return (
       <>

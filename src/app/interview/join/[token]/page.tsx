@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, type PublicJoinInfo } from '@/lib/api';
 import { AppShell } from '@/components/layout/AppShell';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 
 const AUTO_ENTER_DELAY_MS = 800;
 
@@ -51,7 +52,8 @@ export default function JoinInterviewPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-dark">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-dark">
+        <IntervionLogo variant="on-dark" className="h-8" />
         <p className="text-gray-400">Loading…</p>
       </div>
     );
@@ -60,6 +62,7 @@ export default function JoinInterviewPage() {
   if (error && !info) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center px-6 bg-gradient-dark">
+        <IntervionLogo variant="on-dark" className="mb-6 h-8" />
         <p className="mb-2 text-lg text-[var(--error-text)]">{error}</p>
         <p className="mb-4 text-sm text-gray-500">This link may be invalid or the interview may have been cancelled.</p>
         <Link href="/" className="text-primary-400 hover:underline">Go to home</Link>

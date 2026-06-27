@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 const links = [
   { href: '/candidate/dashboard', label: 'Overview' },
   { href: '/candidate/profile', label: 'Profile Details' },
-  { href: '/candidate/applications', label: 'Applied Jobs' },
+  { href: '/candidate/applications', label: 'My applications' },
   { href: '/candidate/career', label: 'Career' },
 ];
 
