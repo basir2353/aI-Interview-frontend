@@ -5,6 +5,8 @@ import { cancelInterviewerSpeech, speakInterviewerText } from '@/lib/interviewer
 interface UseInterviewerVoiceOptions {
   onAutoSpeakStart?: () => void;
   onAutoSpeakEnd?: () => void;
+  /** Called when interviewer TTS begins — use to sync on-screen question text. */
+  onSpeakText?: (text: string, turnId: string) => void;
   /** Turn IDs to skip (e.g. intro + first question spoken manually on live entry). */
   skipTurnIds?: Set<string> | null;
   lang?: string;
@@ -22,13 +24,15 @@ export function useInterviewerVoice(
   const lastSpokenTurnId = useRef<string | null>(null);
   const onAutoSpeakStartRef = useRef(options?.onAutoSpeakStart);
   const onAutoSpeakEndRef = useRef(options?.onAutoSpeakEnd);
+  const onSpeakTextRef = useRef(options?.onSpeakText);
   const skipTurnIds = options?.skipTurnIds;
   const lang = options?.lang;
 
   useEffect(() => {
     onAutoSpeakStartRef.current = options?.onAutoSpeakStart;
     onAutoSpeakEndRef.current = options?.onAutoSpeakEnd;
-  }, [options?.onAutoSpeakStart, options?.onAutoSpeakEnd]);
+    onSpeakTextRef.current = options?.onSpeakText;
+  }, [options?.onAutoSpeakStart, options?.onAutoSpeakEnd, options?.onSpeakText]);
 
   const stopSpeaking = useCallback(() => {
     cancelInterviewerSpeech();
@@ -48,11 +52,15 @@ export function useInterviewerVoice(
 
   /** Speak a specific AI turn and invoke pipeline callbacks. */
   const speakTurn = useCallback(
-    async (text: string) => {
+    async (text: string, turnId: string) => {
       if (!text.trim()) return;
       await speakInterviewerText(text, {
         lang,
-        onStart: () => onAutoSpeakStartRef.current?.(),
+        onStart: () => {
+          lastSpokenTurnId.current = turnId;
+          onSpeakTextRef.current?.(text, turnId);
+          onAutoSpeakStartRef.current?.();
+        },
         onEnd: () => onAutoSpeakEndRef.current?.(),
       });
     },
@@ -73,14 +81,13 @@ export function useInterviewerVoice(
     if (lastAiTurn.id === lastSpokenTurnId.current) return;
     if (skipTurnIds?.has(lastAiTurn.id)) return;
 
-    lastSpokenTurnId.current = lastAiTurn.id;
     const fullText = (lastAiTurn.content || '').trim();
     if (!fullText) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
       if (cancelled) return;
-      void speakTurn(fullText);
+      void speakTurn(fullText, lastAiTurn.id);
     }, 180);
 
     return () => {

@@ -58,7 +58,8 @@ export default function LiveInterviewPage() {
     return window.localStorage.getItem('interviewLanguage') || 'en-US';
   });
   const [voicePhase, setVoicePhase] = useState<VoicePipelinePhase>('idle');
-  /** While intro beats play, show caption + "Introduction" label instead of first question. */
+  /** On-screen question text — synced when AI speaks or state updates. */
+  const [displayQuestion, setDisplayQuestion] = useState('');
   const [introSpeaking, setIntroSpeaking] = useState(false);
   const [liveCaption, setLiveCaption] = useState('');
   /** True once the live UI has painted — intro TTS waits for this. */
@@ -147,9 +148,29 @@ export default function LiveInterviewPage() {
     return new Set(aiTurns.slice(0, Math.min(2, aiTurns.length)).map((t) => t.id));
   }, [state?.turns]);
   const skipTurnIds = manualSpokenAiTurnIds;
+
+  const syncDisplayQuestionFromState = useCallback((s: InterviewState | null | undefined) => {
+    if (!s?.turns?.length) return;
+    const lastAi =
+      [...s.turns].reverse().find((t) => t.role === 'ai' && !t.isIntro) ??
+      [...s.turns].reverse().find((t) => t.role === 'ai');
+    if (lastAi?.content?.trim()) {
+      setDisplayQuestion(lastAi.content.trim());
+    }
+  }, []);
+
+  const handleAiSpeakText = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setDisplayQuestion(trimmed);
+    setLiveCaption(trimmed);
+    setIntroSpeaking(false);
+  }, []);
+
   /** No auto-TTS during device-check / instructions — avoids overlap with the post-onboarding intro. */
   const voiceAutoPlayActive = voiceEnabled && roomPhase === 'live';
   const { stopSpeaking, markTurnSpoken } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
+    onSpeakText: handleAiSpeakText,
     onAutoSpeakStart: () => {
       clearAutoListenTimeout();
       autoListeningRef.current = false;
@@ -161,6 +182,7 @@ export default function LiveInterviewPage() {
     onAutoSpeakEnd: () => {
       noSpeechRetryRef.current = 0;
       userMutedRef.current = false;
+      setLiveCaption('');
       setTimeout(() => {
         if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current) return;
         startAutoListeningWindow();
@@ -225,18 +247,21 @@ export default function LiveInterviewPage() {
   }, [notepadStorageKey, notepadNotes]);
 
   useEffect(() => {
-    if (state?.turns) {
-      const aiTurns = state.turns.filter((t) => t.role === 'ai');
-      const introTurns = aiTurns.filter((t) => t.isIntro);
-      const questionTurn = aiTurns.find((t) => !t.isIntro);
-      console.log('[Intro] State turns', {
-        total: state.turns.length,
-        aiTurns: aiTurns.length,
-        introBeats: introTurns.length,
-        hasQuestion: Boolean(questionTurn),
-        welcomeDelivered: state.welcomeDelivered,
-      });
-    }
+    syncDisplayQuestionFromState(state);
+  }, [state, syncDisplayQuestionFromState]);
+
+  useEffect(() => {
+    if (!state?.turns) return;
+    const aiTurns = state.turns.filter((t) => t.role === 'ai');
+    const introTurns = aiTurns.filter((t) => t.isIntro);
+    const questionTurn = aiTurns.find((t) => !t.isIntro);
+    console.log('[Intro] State turns', {
+      total: state.turns.length,
+      aiTurns: aiTurns.length,
+      introBeats: introTurns.length,
+      hasQuestion: Boolean(questionTurn),
+      welcomeDelivered: state.welcomeDelivered,
+    });
   }, [state?.turns, state?.welcomeDelivered]);
 
   useEffect(() => {
@@ -313,7 +338,9 @@ export default function LiveInterviewPage() {
       } else {
         if (res.state) {
           setState(res.state);
+          syncDisplayQuestionFromState(res.state);
         } else if (res.nextReply) {
+          setDisplayQuestion(res.nextReply.trim());
           loadState();
         }
       }
@@ -329,7 +356,7 @@ export default function LiveInterviewPage() {
       pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow]);
+  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow, syncDisplayQuestionFromState]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
@@ -523,7 +550,7 @@ export default function LiveInterviewPage() {
 
     const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-    const speakSegment = async (text: string) => {
+    const speakSegment = async (text: string, isIntroBeat: boolean) => {
       await speakInterviewerText(text, {
         lang: interviewLang,
         onStart: () => {
@@ -532,6 +559,9 @@ export default function LiveInterviewPage() {
           audioRecorderRef.current?.stop();
           setMicOn(false);
           setVoicePhase('speaking');
+          setIntroSpeaking(isIntroBeat);
+          setLiveCaption(text);
+          if (!isIntroBeat) setDisplayQuestion(text);
         },
       });
     };
@@ -572,11 +602,14 @@ export default function LiveInterviewPage() {
           setIntroSpeaking(false);
           setLiveCaption('');
         }
-        await speakSegment(segments[i]);
+        await speakSegment(segments[i], isIntroBeat);
         await pause(isIntroBeat ? 750 : 450);
       }
       setIntroSpeaking(false);
       setLiveCaption('');
+      if (questionTurn?.content?.trim()) {
+        setDisplayQuestion(questionTurn.content.trim());
+      }
       userMutedRef.current = false;
       if (questionTurn) markTurnSpoken(questionTurn.id);
       else if (aiTurns.length > 0) markTurnSpoken(aiTurns[aiTurns.length - 1].id);
@@ -760,9 +793,11 @@ export default function LiveInterviewPage() {
   const lastAiTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro)
     ?? [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
   const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
-  const currentQuestion = lastAiTurn?.content ?? 'Preparing your next question...';
-  const panelLabel = introSpeaking ? 'Introduction' : 'Current question';
-  const panelText = introSpeaking && liveCaption ? liveCaption : currentQuestion;
+  const currentQuestion = displayQuestion || lastAiTurn?.content || 'Preparing your next question...';
+  const panelLabel =
+    voicePhase === 'speaking' && introSpeaking ? 'Introduction' : 'Current question';
+  const panelText =
+    voicePhase === 'speaking' && liveCaption ? liveCaption : currentQuestion;
   const codingTurnActive = Boolean(
     lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
   );
@@ -957,7 +992,7 @@ export default function LiveInterviewPage() {
                 <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2.5 shadow-sm overflow-hidden">
                   <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
                   <p className="text-sm font-medium text-[var(--surface-light-fg)] line-clamp-2">Current question</p>
-                  <p className="text-xs text-[var(--surface-light-muted)] line-clamp-3 whitespace-pre-wrap">{currentQuestion}</p>
+                  <p className="text-xs text-[var(--surface-light-muted)] whitespace-pre-wrap max-h-32 overflow-y-auto">{currentQuestion}</p>
                 </div>
               </div>
               </div>

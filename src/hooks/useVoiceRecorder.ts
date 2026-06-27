@@ -170,8 +170,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       // Explicit permission request + capture with best browser defaults.
       stream = await navigator.mediaDevices.getUserMedia({
         audio: {
+          // Echo cancel keeps speaker TTS out of the mic; avoid heavy noise gate that clips speech.
           echoCancellation: true,
-          noiseSuppression: true,
+          noiseSuppression: false,
           autoGainControl: true,
           channelCount: 1,
         },
