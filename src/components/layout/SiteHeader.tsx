@@ -234,7 +234,7 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--landing-border)] bg-[var(--landing-surface-solid)] backdrop-blur-md">
+    <header data-site-header className="sticky top-0 z-50 border-b border-[var(--landing-border)] bg-[var(--landing-surface-solid)] backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3 lg:px-8">
         <Link
           href={area === 'admin' ? '/admin' : '/'}

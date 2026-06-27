@@ -9,6 +9,11 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type RecruiterApplication, type RecruiterCustomQuestionInput } from '@/lib/api';
 import type { InterviewRole, InterviewerPersona } from '@/types';
+import {
+  CODING_INTERVIEW_MODES,
+  formatFocusAreasWithCodingMode,
+  type CodingInterviewModeId,
+} from '@/lib/codingInterviewModes';
 
 function getTomorrowDate(): string {
   const d = new Date();
@@ -57,6 +62,7 @@ export default function RecruiterSchedulePage() {
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [durationMinutes, setDurationMinutes] = useState('45');
   const [focusAreas, setFocusAreas] = useState('');
+  const [codingInterviewMode, setCodingInterviewMode] = useState<CodingInterviewModeId | ''>('');
   const [requirements, setRequirements] = useState('');
   const [questionLines, setQuestionLines] = useState('');
   const [codingQuestionText, setCodingQuestionText] = useState('');
@@ -158,7 +164,7 @@ export default function RecruiterSchedulePage() {
         customQuestions: customQuestionPayload,
         codingQuestions: codingQuestionPayload,
         message: messageParts.join('\n\n'),
-        focusAreas: focusAreas.trim() || undefined,
+        focusAreas: formatFocusAreasWithCodingMode(codingInterviewMode, focusAreas) || undefined,
         durationMinutes: durationMinutes.trim() ? parseInt(durationMinutes, 10) : undefined,
         interviewerPersona,
       });
@@ -350,11 +356,33 @@ export default function RecruiterSchedulePage() {
                     </Link>
                   </p>
                 </div>
+                {role === 'technical' && (
+                  <div className="md:col-span-2 flex flex-col gap-1">
+                    <label className="text-xs font-medium text-[var(--surface-light-muted)]">
+                      Coding interview style
+                    </label>
+                    <select
+                      value={codingInterviewMode}
+                      onChange={(e) => setCodingInterviewMode(e.target.value as CodingInterviewModeId | '')}
+                      className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
+                    >
+                      <option value="">General technical interview</option>
+                      {CODING_INTERVIEW_MODES.map((mode) => (
+                        <option key={mode.id} value={mode.id}>
+                          {mode.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-[var(--surface-light-muted)]">
+                      Configures the AI interviewer to ask questions tailored to this specialty.
+                    </p>
+                  </div>
+                )}
                 <input
                   type="text"
                   value={focusAreas}
                   onChange={(e) => setFocusAreas(e.target.value)}
-                  placeholder="Focus areas (e.g. APIs, system design)"
+                  placeholder="Additional focus areas (e.g. APIs, leadership)"
                   className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)] md:col-span-2"
                 />
                 <textarea

@@ -16,9 +16,13 @@ import { waitForSpeechVoices, pickPreferredInterviewerVoice } from '@/lib/voiceP
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
-import { InterviewInstructionsOverlay } from '@/components/interview/InterviewInstructionsOverlay';
 import { motion } from 'framer-motion';
 import { setInterviewRoomOnboarding } from '@/lib/interviewOnboardingGate';
+import { useInterviewImmersiveMode } from '@/hooks/useInterviewImmersiveMode';
+import {
+  InterviewStatusBar,
+  type VoicePipelinePhase,
+} from '@/components/interview/InterviewStatusBar';
 
 export default function LiveInterviewPage() {
   const params = useParams();
@@ -51,6 +55,17 @@ export default function LiveInterviewPage() {
     if (typeof window === 'undefined') return 'en-US';
     return window.localStorage.getItem('interviewLanguage') || 'en-US';
   });
+  const [voicePhase, setVoicePhase] = useState<VoicePipelinePhase>('idle');
+  /** While intro beats play, show caption + "Introduction" label instead of first question. */
+  const [introSpeaking, setIntroSpeaking] = useState(false);
+  const [liveCaption, setLiveCaption] = useState('');
+  /** True once the live UI has painted — intro TTS waits for this. */
+  const [liveScreenReady, setLiveScreenReady] = useState(false);
+
+  useInterviewImmersiveMode(roomPhase === 'live');
+
+  const pipelineBusyRef = useRef(false);
+  const userMutedRef = useRef(false);
 
   const audioRecorderRef = useRef<AudioRecorderHandle>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
@@ -67,6 +82,11 @@ export default function LiveInterviewPage() {
   const lastCodingQuestionIdRef = useRef<string | null>(null);
   const endedByUnloadRef = useRef(false);
   const hasRunStartPromptRef = useRef(false);
+  const loadingRef = useRef(false);
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
 
   const [videoReadyTick, setVideoReadyTick] = useState(0);
   const onCameraVideoReady = useCallback(() => setVideoReadyTick((n) => n + 1), []);
@@ -101,7 +121,8 @@ export default function LiveInterviewPage() {
     if (!voiceEnabled || loading || isCodingTurn) return;
     clearAutoListenTimeout();
     autoListeningRef.current = true;
-    setMicOn(true); // Auto-unmute so user sees mic is on and we record their answer
+    setMicOn(true);
+    setVoicePhase('listening');
     audioRecorderRef.current?.start();
     // Long window so user can finish their full answer before we process (2 min + buffer)
     const listenWindowMs = 125000;
@@ -111,12 +132,18 @@ export default function LiveInterviewPage() {
     }, listenWindowMs);
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
 
-  /** First chronological AI turn id only — stable `Set` ref so useInterviewerVoice doesn't re-fire cleanup every render (that was cancelling TTS for Q2+). */
-  const firstAiTurnIdForHookSkip = state?.turns?.find((t) => t.role === 'ai')?.id ?? null;
-  const skipTurnIds = useMemo(
-    () => (firstAiTurnIdForHookSkip ? new Set<string>([firstAiTurnIdForHookSkip]) : null),
-    [firstAiTurnIdForHookSkip]
-  );
+  /** Intro beats + first question are spoken manually on live entry — skip auto-TTS for those. */
+  const manualSpokenAiTurnIds = useMemo(() => {
+    const aiTurns = state?.turns?.filter((t) => t.role === 'ai') ?? [];
+    if (!aiTurns.length) return null;
+    const introTurns = aiTurns.filter((t) => t.isIntro);
+    const firstQuestion = aiTurns.find((t) => !t.isIntro);
+    if (introTurns.length >= 1 && firstQuestion) {
+      return new Set([...introTurns.map((t) => t.id), firstQuestion.id]);
+    }
+    return new Set(aiTurns.slice(0, Math.min(2, aiTurns.length)).map((t) => t.id));
+  }, [state?.turns]);
+  const skipTurnIds = manualSpokenAiTurnIds;
   /** No auto-TTS during device-check / instructions — avoids overlap with the post-onboarding intro. */
   const voiceAutoPlayActive = voiceEnabled && roomPhase === 'live';
   const { stopSpeaking, speakText } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
@@ -125,12 +152,21 @@ export default function LiveInterviewPage() {
       autoListeningRef.current = false;
       noSpeechRetryRef.current = 0;
       audioRecorderRef.current?.stop();
+      setMicOn(false);
+      setVoicePhase('speaking');
     },
     onAutoSpeakEnd: () => {
       noSpeechRetryRef.current = 0;
-      setTimeout(() => {
-        if (!loading && voiceEnabled) startAutoListeningWindow();
-      }, 220);
+      userMutedRef.current = false;
+      const tryStartMic = (attempt = 0) => {
+        if (!voiceEnabled) return;
+        if (loadingRef.current && attempt < 60) {
+          setTimeout(() => tryStartMic(attempt + 1), 250);
+          return;
+        }
+        if (!loadingRef.current) startAutoListeningWindow();
+      };
+      setTimeout(() => tryStartMic(), 220);
     },
     skipTurnIds,
     lang: interviewLang,
@@ -140,6 +176,14 @@ export default function LiveInterviewPage() {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const voiceStatusPhase: VoicePipelinePhase = loading ? 'thinking' : voicePhase;
+  const voiceStatusDetail =
+    loading && answerText
+      ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
+      : countdownRemaining > 0
+        ? `Next question in ${countdownRemaining}s`
+        : undefined;
 
   const loadState = useCallback(async () => {
     if (!id) return;
@@ -156,7 +200,7 @@ export default function LiveInterviewPage() {
   }, [loadState]);
 
   useEffect(() => {
-    const onboarding = roomPhase === 'device-check' || roomPhase === 'instructions';
+    const onboarding = roomPhase === 'device-check' || roomPhase === 'instructions' || roomPhase === 'live';
     setInterviewRoomOnboarding(onboarding);
     return () => setInterviewRoomOnboarding(false);
   }, [roomPhase]);
@@ -184,9 +228,18 @@ export default function LiveInterviewPage() {
 
   useEffect(() => {
     if (state?.turns) {
-      console.log(`[Page] Turns updated: ${state.turns.length} turns now present.`);
+      const aiTurns = state.turns.filter((t) => t.role === 'ai');
+      const introTurns = aiTurns.filter((t) => t.isIntro);
+      const questionTurn = aiTurns.find((t) => !t.isIntro);
+      console.log('[Intro] State turns', {
+        total: state.turns.length,
+        aiTurns: aiTurns.length,
+        introBeats: introTurns.length,
+        hasQuestion: Boolean(questionTurn),
+        welcomeDelivered: state.welcomeDelivered,
+      });
     }
-  }, [state?.turns]);
+  }, [state?.turns, state?.welcomeDelivered]);
 
   useEffect(() => {
     if (!state) return;
@@ -197,7 +250,9 @@ export default function LiveInterviewPage() {
 
   useEffect(() => {
     if (!state || loading) return;
-    const lastAiTurn = [...state.turns].reverse().find((t) => t.role === 'ai');
+    const lastAiTurn =
+      [...state.turns].reverse().find((t) => t.role === 'ai' && !t.isIntro) ??
+      [...state.turns].reverse().find((t) => t.role === 'ai');
     if (!lastAiTurn) return;
     if (autoListenQuestionIdRef.current === lastAiTurn.id) return;
     autoListenQuestionIdRef.current = lastAiTurn.id;
@@ -235,6 +290,7 @@ export default function LiveInterviewPage() {
     const text = rawText.trim();
     if (!text || loading || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
+    pipelineBusyRef.current = true;
     setPendingAnswer(null);
     setCountdownRemaining(0);
     pendingAnswerRef.current = null;
@@ -247,6 +303,8 @@ export default function LiveInterviewPage() {
     autoListeningRef.current = false;
     noSpeechRetryRef.current = 0;
     audioRecorderRef.current?.stop();
+    setMicOn(false);
+    setVoicePhase('thinking');
     setError('');
     setLoading(true);
     try {
@@ -266,6 +324,8 @@ export default function LiveInterviewPage() {
       setError(e instanceof Error ? e.message : 'Failed to submit');
     } finally {
       setLoading(false);
+      setVoicePhase('idle');
+      pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
   }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking]);
@@ -274,6 +334,8 @@ export default function LiveInterviewPage() {
     (text: string) => {
       const cleaned = text.trim();
       if (!cleaned) return;
+      pipelineBusyRef.current = true;
+      setVoicePhase('transcribing');
       setAnswerText(cleaned);
       autoListeningRef.current = false;
       noSpeechRetryRef.current = 0;
@@ -339,6 +401,7 @@ export default function LiveInterviewPage() {
     autoListeningRef.current = false;
     noSpeechRetryRef.current = 0;
     clearAutoListenTimeout();
+    userMutedRef.current = micOn;
     audioRecorderRef.current?.toggle();
   };
 
@@ -382,15 +445,16 @@ export default function LiveInterviewPage() {
       window.speechSynthesis.cancel();
     }
     stopSpeaking();
-    /** Screen share while we still have the user gesture from “Next” (notes screen will read aloud). */
     void handleStartScreenShare();
     if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
       void document.documentElement.requestFullscreen().catch(() => {});
     }
-    setRoomPhase('instructions');
+    hasRunStartPromptRef.current = false;
+    setLiveScreenReady(false);
+    setRoomPhase('live');
   }, [stopSpeaking, handleStartScreenShare]);
 
-  const enterLiveRoom = useCallback(() => {
+  const beginLiveInterview = useCallback(() => {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -400,13 +464,45 @@ export default function LiveInterviewPage() {
     noSpeechRetryRef.current = 0;
     audioRecorderRef.current?.stop();
     setMicOn(false);
-    /** Allow welcome + first-question intro to run from the beginning after onboarding. */
     hasRunStartPromptRef.current = false;
-    if (typeof document !== 'undefined' && document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => {});
-    }
+    setLiveScreenReady(false);
+    void handleStartScreenShare();
+    setTimeout(() => {
+      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+        void document.documentElement.requestFullscreen().catch(() => {});
+      }
+    }, 80);
     setRoomPhase('live');
-  }, [stopSpeaking, clearAutoListenTimeout]);
+  }, [stopSpeaking, clearAutoListenTimeout, handleStartScreenShare]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.sessionStorage.getItem('interviewBeginLive') !== '1') return;
+    window.sessionStorage.removeItem('interviewBeginLive');
+    beginLiveInterview();
+  }, [beginLiveInterview]);
+
+  useEffect(() => {
+    if (roomPhase !== 'live') {
+      setLiveScreenReady(false);
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        timer = setTimeout(() => {
+          if (!cancelled) setLiveScreenReady(true);
+        }, 900);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      if (timer) clearTimeout(timer);
+    };
+  }, [roomPhase]);
 
   useEffect(() => {
     if (!screenStream || !screenVideoRef.current) return;
@@ -416,46 +512,129 @@ export default function LiveInterviewPage() {
     };
   }, [screenStream]);
 
-  // Live room only: speak the first interview question (notes + screen share happen on the instructions screen, not here).
+  // Live room: wait until the screen is visible, deliver welcome via API, then speak intro + first question.
   useEffect(() => {
-    if (roomPhase !== 'live') return;
+    if (roomPhase !== 'live' || !liveScreenReady) return;
     if (!state || report || hasRunStartPromptRef.current || typeof window === 'undefined') return;
-    const firstAiTurn = state.turns?.find((t) => t.role === 'ai');
-    if (!firstAiTurn?.content?.trim()) return;
 
-    hasRunStartPromptRef.current = true;
+    let cancelled = false;
 
-    const runVoiceIntro = async () => {
-      if (!window.speechSynthesis) {
-        speakText(firstAiTurn.content.trim(), interviewLang);
-        setTimeout(() => startAutoListeningWindow(), 500);
+    const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    const speakLine = (text: string) =>
+      new Promise<void>((resolve) => {
+        if (!window.speechSynthesis) {
+          speakText(text, interviewLang);
+          resolve();
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(text.trim());
+        const voices = window.speechSynthesis.getVoices();
+        const voice = pickPreferredInterviewerVoice(voices);
+        if (voice) utterance.voice = voice;
+        utterance.lang = interviewLang || voice?.lang || 'en-US';
+        utterance.rate = 0.94;
+        utterance.pitch = 1.03;
+        utterance.onstart = () => {
+          setVoicePhase('speaking');
+          setMicOn(false);
+        };
+        utterance.onend = () => resolve();
+        utterance.onerror = () => resolve();
+        window.speechSynthesis.speak(utterance);
+      });
+
+    const runVoiceIntro = async (liveState: InterviewState) => {
+      const aiTurns = liveState.turns?.filter((t) => t.role === 'ai') ?? [];
+      const introTurns = aiTurns.filter((t) => t.isIntro);
+      const questionTurn = aiTurns.find((t) => !t.isIntro);
+      const segments =
+        introTurns.length >= 1
+          ? [...introTurns.map((t) => t.content.trim()).filter(Boolean), ...(questionTurn?.content?.trim() ? [questionTurn.content.trim()] : [])]
+          : aiTurns[0]?.content?.trim()
+            ? [aiTurns[0].content.trim(), ...(aiTurns[1]?.content?.trim() ? [aiTurns[1].content.trim()] : [])]
+            : [];
+
+      console.log('[Intro] Speaking segments', {
+        segmentCount: segments.length,
+        introBeats: introTurns.length,
+        preview: segments.map((s) => s.slice(0, 70)),
+      });
+
+      if (segments.length === 0) {
+        hasRunStartPromptRef.current = false;
         return;
       }
-      const voices = await waitForSpeechVoices();
-      const voice = pickPreferredInterviewerVoice(voices);
-      const lang = interviewLang || voice?.lang || 'en-US';
 
-      return new Promise<void>((resolve) => {
-        window.speechSynthesis.cancel();
-        const firstQuestionUtterance = new SpeechSynthesisUtterance(firstAiTurn.content.trim());
-        if (voice) firstQuestionUtterance.voice = voice;
-        firstQuestionUtterance.lang = lang;
-        firstQuestionUtterance.rate = 0.96;
-        firstQuestionUtterance.pitch = 1.03;
-        firstQuestionUtterance.onend = () => {
-          startAutoListeningWindow();
-          resolve();
-        };
-        firstQuestionUtterance.onerror = () => {
-          startAutoListeningWindow();
-          resolve();
-        };
-        window.speechSynthesis.speak(firstQuestionUtterance);
-      });
+      const introSegmentCount = introTurns.length >= 1 ? introTurns.length : Math.max(0, segments.length - 1);
+
+      setIntroSpeaking(true);
+      if (!window.speechSynthesis) {
+        for (let i = 0; i < segments.length; i++) {
+          if (cancelled) return;
+          setLiveCaption(segments[i]);
+          speakText(segments[i], interviewLang);
+          await pause(i < introSegmentCount ? 900 : 400);
+        }
+        setIntroSpeaking(false);
+        setLiveCaption('');
+        userMutedRef.current = false;
+        startAutoListeningWindow();
+        return;
+      }
+      await waitForSpeechVoices();
+      window.speechSynthesis.cancel();
+      for (let i = 0; i < segments.length; i++) {
+        if (cancelled) return;
+        const isIntroBeat = i < introSegmentCount;
+        if (isIntroBeat) {
+          setIntroSpeaking(true);
+          setLiveCaption(segments[i]);
+        } else {
+          setIntroSpeaking(false);
+          setLiveCaption('');
+        }
+        await speakLine(segments[i]);
+        await pause(isIntroBeat ? 750 : 450);
+      }
+      setIntroSpeaking(false);
+      setLiveCaption('');
+      userMutedRef.current = false;
+      startAutoListeningWindow();
     };
 
-    void runVoiceIntro();
-  }, [state, report, speakText, interviewLang, startAutoListeningWindow, roomPhase]);
+    const beginAndSpeak = async () => {
+      hasRunStartPromptRef.current = true;
+      try {
+        const needsWelcome =
+          !state.welcomeDelivered ||
+          !state.turns.some((t) => t.role === 'ai' && t.isIntro);
+        let liveState = state;
+        if (needsWelcome) {
+          console.log('[Intro] Calling begin-live API…');
+          const res = await api.beginLiveInterview(id);
+          if (cancelled) return;
+          liveState = res.state;
+          setState(res.state);
+          console.log('[Intro] begin-live response', {
+            alreadyDelivered: res.alreadyDelivered,
+            firstIntro: res.firstIntro?.slice(0, 80),
+            introBeats: res.state.turns.filter((t) => t.role === 'ai' && t.isIntro).length,
+          });
+        }
+        await runVoiceIntro(liveState);
+      } catch (e) {
+        console.error('[Intro] Failed to begin live interview', e);
+        hasRunStartPromptRef.current = false;
+      }
+    };
+
+    void beginAndSpeak();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state, report, speakText, interviewLang, startAutoListeningWindow, roomPhase, liveScreenReady, id]);
 
   useEffect(() => {
     return () => {
@@ -582,19 +761,27 @@ export default function LiveInterviewPage() {
 
   if (!state) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-dark">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-[var(--landing-accent)]/30 border-t-[var(--landing-accent-solid)]" />
-          <p className="mb-4 text-[var(--app-muted)]">Loading interview…</p>
-          <Link href="/interview" className="text-sm font-medium text-[var(--landing-accent)] hover:text-[var(--landing-accent-hover)]">Back to start</Link>
+      <div className="flex min-h-screen items-center justify-center bg-[var(--interview-bg)]">
+        <div className="w-full max-w-md space-y-4 px-6 text-center">
+          <div className="mx-auto h-12 w-12 animate-pulse rounded-2xl bg-[var(--interview-border)]" />
+          <div className="space-y-2">
+            <div className="mx-auto h-4 w-48 animate-pulse rounded-lg bg-[var(--interview-border)]" />
+            <div className="mx-auto h-3 w-64 animate-pulse rounded-lg bg-[var(--interview-border)]/70" />
+          </div>
+          <Link href="/interview" className="inline-block text-sm font-medium text-[var(--interview-accent)] hover:underline">
+            Back to start
+          </Link>
         </div>
       </div>
     );
   }
 
-  const lastAiTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
+  const lastAiTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro)
+    ?? [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
   const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
   const currentQuestion = lastAiTurn?.content ?? 'Preparing your next question...';
+  const panelLabel = introSpeaking ? 'Introduction' : 'Current question';
+  const panelText = introSpeaking && liveCaption ? liveCaption : currentQuestion;
   const codingTurnActive = Boolean(
     lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
   );
@@ -624,19 +811,7 @@ export default function LiveInterviewPage() {
         onCameraOnChange={setCameraOn}
         cameraVideoRef={cameraVideoRef}
         onVideoReady={onCameraVideoReady}
-      />
-    );
-  }
-
-  if (roomPhase === 'instructions') {
-    return (
-      <InterviewInstructionsOverlay
-        showCodeTab={showCodeTab}
-        codingTurnActive={codingTurnActive}
-        showNotepadTab={showNotepadTab}
-        interviewLang={interviewLang}
-        onShareScreen={handleStartScreenShare}
-        onSoundsGood={enterLiveRoom}
+        nextLabel="Enter interview room"
       />
     );
   }
@@ -649,16 +824,22 @@ export default function LiveInterviewPage() {
 
   return (
     <motion.div
-      className="fixed inset-0 flex flex-col bg-[var(--surface-light)] text-[var(--surface-light-fg)]"
+      className="fixed inset-0 z-[200] flex flex-col bg-[var(--interview-bg)] text-[var(--interview-fg)]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
     >
-      <header className="shrink-0 flex flex-col gap-3 border-b border-[var(--surface-light-border)] bg-[var(--surface-light)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
+      {!liveScreenReady && (
+        <div className="absolute inset-0 z-[260] flex flex-col items-center justify-center gap-4 bg-[var(--interview-bg)]/95 backdrop-blur-sm">
+          <div className="h-10 w-10 animate-pulse rounded-2xl bg-[var(--interview-border)]" />
+          <p className="text-sm font-medium text-[var(--interview-muted)]">Your interview room is ready…</p>
+        </div>
+      )}
+      <header className="shrink-0 flex flex-col gap-3 border-b border-[var(--interview-border)] bg-[var(--interview-card)]/90 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex shrink-0 items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-[var(--success-text)]" />
-            <p className="text-lg font-bold tracking-tight sm:text-xl">Intervion</p>
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            <p className="text-lg font-semibold tracking-tight text-[var(--interview-fg)] sm:text-xl">Intervion</p>
           </div>
           <select
             value={interviewLang}
@@ -667,7 +848,7 @@ export default function LiveInterviewPage() {
               setInterviewLang(v);
               if (typeof window !== 'undefined') window.localStorage.setItem('interviewLanguage', v);
             }}
-            className="shrink-0 rounded-lg border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-1.5 text-sm text-[var(--surface-light-fg)]"
+            className="shrink-0 rounded-lg border border-[var(--interview-border)] bg-[var(--interview-card)] px-3 py-1.5 text-sm text-[var(--interview-fg)]"
             title="Interview language"
           >
             <option value="en-US">English</option>
@@ -678,14 +859,14 @@ export default function LiveInterviewPage() {
             <option value="ar">العربية</option>
           </select>
           {showTabBar && (
-            <div className="flex w-full min-w-0 shrink-0 basis-full flex-wrap items-center gap-1 rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-1 shadow-sm sm:basis-auto sm:w-auto">
+            <div className="flex w-full min-w-0 shrink-0 basis-full flex-wrap items-center gap-1 rounded-xl border border-[var(--interview-border)] bg-[var(--interview-card)] p-1 shadow-[var(--interview-shadow)] sm:basis-auto sm:w-auto">
               <button
                 type="button"
                 onClick={() => setActiveTab('interview')}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold transition sm:px-4 ${
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition sm:px-4 ${
                   activeTab === 'interview'
-                    ? 'bg-[var(--accent)] text-white'
-                    : 'text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]'
+                    ? 'bg-[var(--interview-accent)] text-white shadow-sm'
+                    : 'text-[var(--interview-muted)] hover:text-[var(--interview-fg)]'
                 }`}
               >
                 Interview
@@ -694,10 +875,10 @@ export default function LiveInterviewPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('code')}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition sm:px-4 ${
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition sm:px-4 ${
                     activeTab === 'code'
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]'
+                      ? 'bg-[var(--interview-accent)] text-white shadow-sm'
+                      : 'text-[var(--interview-muted)] hover:text-[var(--interview-fg)]'
                   }`}
                 >
                   Code
@@ -706,10 +887,10 @@ export default function LiveInterviewPage() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('notepad')}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition sm:px-4 ${
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition sm:px-4 ${
                     activeTab === 'notepad'
-                      ? 'bg-[var(--accent)] text-white'
-                      : 'text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]'
+                      ? 'bg-[var(--interview-accent)] text-white shadow-sm'
+                      : 'text-[var(--interview-muted)] hover:text-[var(--interview-fg)]'
                   }`}
                 >
                   Notepad
@@ -718,7 +899,7 @@ export default function LiveInterviewPage() {
             </div>
           )}
         </div>
-        <div className="shrink-0 rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-2 text-sm font-medium text-[var(--surface-light-muted)] shadow-sm">
+        <div className="shrink-0 rounded-2xl border border-[var(--interview-border)] bg-[var(--interview-card)] px-4 py-2 text-sm font-medium tabular-nums text-[var(--interview-muted)] shadow-[var(--interview-shadow)]">
           {minutes}:{seconds}
         </div>
       </header>
@@ -1039,31 +1220,19 @@ export default function LiveInterviewPage() {
               </div>
             )}
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)] mb-1">{interviewerDisplayName}</p>
-            <p className="text-[15px] font-medium text-[var(--surface-light-fg)]">Current question</p>
-            <p className="text-[15px] leading-7 text-[var(--surface-light-fg)] whitespace-pre-wrap">{currentQuestion}</p>
+            <p className="text-[15px] font-medium text-[var(--surface-light-fg)]">{panelLabel}</p>
+            <p className="text-[15px] leading-7 text-[var(--surface-light-fg)] whitespace-pre-wrap">{panelText}</p>
             {lastCandidateTurn?.content && (
               <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-4 py-3 text-sm text-[var(--surface-light-fg)]">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Your last answer (submitted)</p>
                 <p className="leading-relaxed">{lastCandidateTurn.content}</p>
               </div>
             )}
-            <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-muted)] shadow-sm">
-              {loading
-                ? (answerText ? (
-                    <>
-                      <p className="font-medium text-[var(--surface-light-fg)]">Processing your answer…</p>
-                      <p className="mt-1 line-clamp-2 text-[var(--surface-light-muted)]">&ldquo;{answerText.slice(0, 120)}{answerText.length > 120 ? '…' : ''}&rdquo;</p>
-                    </>
-                  ) : 'Processing your answer…')
-                : countdownRemaining > 0
-                  ? `Answer received. Next question in ${countdownRemaining}s…`
-                  : micOn
-                    ? 'Listening…'
-                    : 'Your answer will be captured automatically when you speak.'}
-              {countdownRemaining > 0 && cameraUserIdle && (
-                <span className="mt-1 block text-xs text-[var(--accent)]">You’re ready. Next question in {countdownRemaining}s.</span>
-              )}
-            </div>
+            <InterviewStatusBar
+              phase={voiceStatusPhase}
+              micOn={micOn}
+              detail={voiceStatusDetail}
+            />
             {error && (
               <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
             )}
@@ -1072,12 +1241,12 @@ export default function LiveInterviewPage() {
           </>
         )}
 
-        <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-2 shadow-lg backdrop-blur">
+        <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[var(--interview-border)] bg-[var(--interview-card)]/95 px-4 py-2 shadow-[var(--interview-shadow)] backdrop-blur-sm">
           <button
             onClick={handleMicToggle}
             disabled={loading || codingTurnActive}
             className={`flex h-10 w-10 items-center justify-center rounded-full text-white transition ${
-              micOn ? 'bg-[var(--accent)] hover:bg-[var(--accent-hover)]' : 'bg-[var(--surface-light-muted)] hover:opacity-90'
+              micOn ? 'bg-[var(--interview-accent)] hover:opacity-90' : 'bg-[var(--interview-muted)] hover:opacity-90'
             } disabled:opacity-50`}
             title="Toggle microphone"
           >
@@ -1145,11 +1314,11 @@ export default function LiveInterviewPage() {
         <AudioRecorder
           ref={audioRecorderRef}
           onTranscript={handleVoiceTranscript}
-          silenceMs={2800}
-          minRecordMs={1500}
-          minSpeechMs={1800}
+          silenceMs={3500}
+          minRecordMs={800}
+          minSpeechMs={500}
           maxRecordMs={120000}
-          stopDelayMs={400}
+          stopDelayMs={200}
           onNoSpeech={() => {
             if (!autoListeningRef.current || !voiceEnabled || loading) return;
             if (noSpeechRetryRef.current >= 2) {
@@ -1166,7 +1335,23 @@ export default function LiveInterviewPage() {
           }}
           disabled={loading}
           autoStart={false}
-          onListeningChange={setMicOn}
+          onListeningChange={(listening) => {
+            if (listening) {
+              userMutedRef.current = false;
+              setMicOn(true);
+              setVoicePhase('listening');
+              return;
+            }
+            if (userMutedRef.current || voicePhase === 'speaking') {
+              setMicOn(false);
+              return;
+            }
+            if (pipelineBusyRef.current || loading || autoListeningRef.current) {
+              setMicOn(true);
+              return;
+            }
+            setMicOn(false);
+          }}
           hideButton
         />
       </div>

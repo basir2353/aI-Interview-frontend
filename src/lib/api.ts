@@ -10,6 +10,7 @@ import type {
   InterviewReport,
   StartInterviewResponse,
   SubmitAnswerResponse,
+  BeginLiveInterviewResponse,
 } from '@/types';
 
 // Use same-origin proxy so the browser never hits :4000 directly (avoids ERR_CONNECTION_REFUSED).
@@ -70,6 +71,12 @@ export const api = {
 
   getState(interviewId: string) {
     return request<InterviewState>(`/interview/${interviewId}/state`);
+  },
+
+  beginLiveInterview(interviewId: string) {
+    return request<BeginLiveInterviewResponse>(`/interview/${interviewId}/begin-live`, {
+      method: 'POST',
+    });
   },
 
   endInterview(interviewId: string) {
@@ -858,9 +865,9 @@ export interface PublicJoinInfo {
 
 export interface PublicJoinStartResponse {
   interviewId: string;
-  firstReply: string;
   state: InterviewState;
   alreadyStarted?: boolean;
+  firstReply?: string;
 }
 
 export interface PublicJob {

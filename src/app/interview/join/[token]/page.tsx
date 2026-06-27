@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { api, type PublicJoinInfo } from '@/lib/api';
 import { AppShell } from '@/components/layout/AppShell';
 
-const AUTO_START_DELAY_MS = 1200; // Auto-start when user arrives; short delay so page is visible
+const AUTO_ENTER_DELAY_MS = 800;
 
 export default function JoinInterviewPage() {
   const params = useParams();
@@ -15,9 +15,8 @@ export default function JoinInterviewPage() {
 
   const [info, setInfo] = useState<PublicJoinInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
-  const autoStartDoneRef = useRef(false);
+  const autoEnterDoneRef = useRef(false);
 
   useEffect(() => {
     if (!token) return;
@@ -27,31 +26,28 @@ export default function JoinInterviewPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const handleStart = async () => {
+  const goToInterviewRoom = () => {
     if (!token) return;
-    setError('');
-    setStarting(true);
-    try {
-      const res = await api.publicStartJoin(token);
-      router.push(`/interview/${res.interviewId}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start');
-    } finally {
-      setStarting(false);
+    if (info?.interviewId && info.status === 'in_progress') {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('interviewBeginLive', '1');
+      }
+      router.push(`/interview/${info.interviewId}`);
+      return;
     }
+    router.push(`/interview/enter/${token}`);
   };
 
-  // Auto-start when user arrives: after info is loaded, start the interview automatically
+  // After join info loads, send candidate to device-check / live entry (no AI until live screen).
   useEffect(() => {
-    if (!info || loading || starting || error || autoStartDoneRef.current) return;
+    if (!info || loading || error || autoEnterDoneRef.current) return;
     if (info.alreadyCompleted || info.status === 'cancelled') return;
-
-    autoStartDoneRef.current = true;
+    autoEnterDoneRef.current = true;
     const t = setTimeout(() => {
-      void handleStart();
-    }, AUTO_START_DELAY_MS);
+      goToInterviewRoom();
+    }, AUTO_ENTER_DELAY_MS);
     return () => clearTimeout(t);
-  }, [info, loading, starting, error]);
+  }, [info, loading, error, token]);
 
   if (loading) {
     return (
@@ -109,17 +105,16 @@ export default function JoinInterviewPage() {
             {info?.scheduledAt ? new Date(info.scheduledAt).toLocaleString() : '—'}
           </p>
           <p className="mb-8 text-sm text-gray-400">
-            Starting your interview automatically. You will hear instructions by voice — no need to click.
+            Opening the interview room… You will enter the live screen first, then your AI interviewer will begin.
           </p>
           {error && <p className="mb-4 text-sm text-[var(--error-text)]">{error}</p>}
           <button
             type="button"
-            onClick={handleStart}
-            disabled={starting}
+            onClick={goToInterviewRoom}
             className="rounded-xl px-8 py-4 text-lg font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white/50"
             style={{ backgroundColor: 'var(--accent, #6366f1)' }}
           >
-            {starting ? 'Starting…' : 'Start now'}
+            Enter interview room
           </button>
         </div>
       </div>

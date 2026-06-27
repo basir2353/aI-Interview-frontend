@@ -52,7 +52,25 @@
   --error-border: rgba(239, 68, 68, 0.35);
   --warning-bg: rgba(245, 158, 11, 0.12);
   --warning-text: #b45309;
+  /* Premium interview room (neutral, enterprise) */
+  --interview-bg: #f8fafc;
+  --interview-fg: #0f172a;
+  --interview-muted: #64748b;
+  --interview-border: #e2e8f0;
+  --interview-card: #ffffff;
+  --interview-accent: #2563eb;
+  --interview-accent-muted: rgba(37, 99, 235, 0.08);
+  --interview-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px rgba(15, 23, 42, 0.04);
   --warning-border: rgba(245, 158, 11, 0.35);
+}
+
+body.interview-immersive {
+  overflow: hidden;
+  background: var(--interview-bg);
+}
+
+body.interview-immersive [data-site-header] {
+  display: none !important;
 }
 
 /* Explicit dark theme (when user selects dark) — surfaces match :root */

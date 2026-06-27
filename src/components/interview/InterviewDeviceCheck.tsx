@@ -11,6 +11,7 @@ type InterviewDeviceCheckProps = {
   onCameraOnChange: (v: boolean) => void;
   cameraVideoRef: React.MutableRefObject<HTMLVideoElement | null>;
   onVideoReady?: () => void;
+  nextLabel?: string;
 };
 
 /**
@@ -22,6 +23,7 @@ export function InterviewDeviceCheck({
   onCameraOnChange,
   cameraVideoRef,
   onVideoReady,
+  nextLabel = 'Next',
 }: InterviewDeviceCheckProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -216,7 +218,7 @@ export function InterviewDeviceCheck({
               }`}
             >
               <span className="relative z-10 flex items-center justify-center gap-2">
-                Next
+                {nextLabel}
                 <svg className="h-5 w-5 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>

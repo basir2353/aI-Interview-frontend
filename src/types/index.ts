@@ -22,6 +22,8 @@ export interface Turn {
   isCodingQuestion?: boolean;
   /** Talking-head video URL for this AI turn (SadTalker + Wav2Lip + Coqui TTS). */
   avatarVideo?: string;
+  /** Welcome intro only — not the active interview question */
+  isIntro?: boolean;
 }
 
 export interface AnswerEvaluation {
@@ -41,6 +43,18 @@ export interface InterviewState {
   candidateId: string;
   /** Parsed candidate resume/profile summary to personalize interview questions */
   resumeContext?: string;
+  /** Structured resume profile parsed before the interview */
+  resumeProfile?: {
+    candidateName?: string;
+    positionTitle?: string;
+    skills?: string[];
+    techStack?: string[];
+    experience?: string[];
+    projects?: string[];
+    summary?: string;
+  };
+  welcomeDelivered?: boolean;
+  positionTitle?: string;
   role: InterviewRole;
   phase: InterviewPhase;
   startedAt: string;
@@ -87,8 +101,15 @@ export interface InterviewReport {
 export interface StartInterviewResponse {
   interviewId: string;
   state: InterviewState;
-  firstReply: string;
+  firstReply?: string;
   /** Talking-head video URL for firstReply when avatar pipeline is enabled. */
+  avatarVideo?: string;
+}
+
+export interface BeginLiveInterviewResponse {
+  state: InterviewState;
+  firstIntro: string;
+  alreadyDelivered?: boolean;
   avatarVideo?: string;
 }
 
