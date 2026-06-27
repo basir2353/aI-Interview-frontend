@@ -80,6 +80,11 @@ body.interview-immersive [data-site-header] {
   display: none !important;
 }
 
+/* Recruiter / admin dashboard apps use their own sidebar — never show marketing header */
+html[data-dashboard-app] [data-site-header] {
+  display: none !important;
+}
+
 /* Interview room — fixed dark palette, independent of site theme toggle */
 [data-interview-room='true'] {
   --interview-bg: #0f0d18;

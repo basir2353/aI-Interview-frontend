@@ -3,30 +3,26 @@
 import { usePathname } from 'next/navigation';
 import { useSyncExternalStore } from 'react';
 import { SiteHeader } from './SiteHeader';
+import { shouldHideSiteHeader } from '@/lib/dashboardRoutes';
 import {
   getInterviewRoomOnboarding,
   subscribeInterviewRoomOnboarding,
 } from '@/lib/interviewOnboardingGate';
 
 /**
- * Renders the main site header only when NOT on an admin route.
- * On /admin/* we use AdminShell's own sidebar; showing SiteHeader would duplicate nav and cause layout/overflow issues.
- * On /interview/[id] during device-check / instructions, header is hidden so onboarding is truly full-screen.
+ * Renders the main site header only outside dashboard app routes.
+ * Admin and recruiter use sidebar shells; the marketing header duplicates nav and clashes visually.
  */
 export function ConditionalSiteHeader() {
   const pathname = usePathname();
-  const isAdmin = pathname?.startsWith('/admin');
-  const isRecruiterApp =
-    pathname?.startsWith('/recruiter') &&
-    pathname !== '/recruiter/login' &&
-    pathname !== '/recruiter/forgot-password';
   const interviewOnboarding = useSyncExternalStore(
     subscribeInterviewRoomOnboarding,
     getInterviewRoomOnboarding,
     () => false
   );
   const isLiveInterviewById = Boolean(pathname?.match(/^\/interview\/(?!join)[^/]+$/));
-  if (isAdmin || isRecruiterApp) return null;
+
+  if (shouldHideSiteHeader(pathname)) return null;
   if (isLiveInterviewById && interviewOnboarding) return null;
   return <SiteHeader />;
 }
