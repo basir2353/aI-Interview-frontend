@@ -138,13 +138,14 @@ export default function LiveInterviewPage() {
     if (audioRecorderRef.current?.listening) return;
     clearAutoListenTimeout();
     autoListeningRef.current = true;
-    setVoicePhase('listening');
 
     const tryStartMic = async (attempt = 0) => {
       if (!autoListeningRef.current) return;
       const started = (await audioRecorderRef.current?.start()) ?? false;
-      if (started || audioRecorderRef.current?.listening) {
-        setMicOn(true);
+      if (started) {
+        await new Promise((r) => window.setTimeout(r, 100));
+      }
+      if (started && audioRecorderRef.current?.listening) {
         return;
       }
       if (attempt < 8) {
@@ -239,7 +240,8 @@ export default function LiveInterviewPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const voiceStatusPhase: VoicePipelinePhase = loading ? 'thinking' : voicePhase;
+  const voiceStatusPhase: VoicePipelinePhase =
+    loading ? 'thinking' : voicePhase === 'listening' && !micOn ? 'idle' : voicePhase;
   const voiceStatusDetail =
     loading && answerText
       ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
@@ -469,12 +471,12 @@ export default function LiveInterviewPage() {
 
   const handleMicToggle = () => {
     clearAutoListenTimeout();
-    if (micOn) {
+    if (micOn || voicePhase === 'listening' || autoListeningRef.current) {
       userMutedRef.current = true;
       autoListeningRef.current = false;
       audioRecorderRef.current?.cancel();
       setMicOn(false);
-      if (voicePhase === 'listening') setVoicePhase('idle');
+      setVoicePhase('idle');
       return;
     }
     userMutedRef.current = false;
@@ -610,7 +612,6 @@ export default function LiveInterviewPage() {
       if (cancelled) return;
       setIntroSpeaking(false);
       setLiveCaption('');
-      setVoicePhase('listening');
       userMutedRef.current = false;
       if (questionTurnId) markTurnSpokenRef.current(questionTurnId);
       startAutoListeningWindowRef.current();
@@ -919,7 +920,6 @@ export default function LiveInterviewPage() {
         }
         noSpeechRetryRef.current += 1;
         setError('');
-        setVoicePhase('listening');
         setTimeout(() => {
           if (!autoListeningRef.current || loading || !voiceEnabled) return;
           startAutoListeningWindow();
@@ -934,16 +934,17 @@ export default function LiveInterviewPage() {
           setVoicePhase('listening');
           return;
         }
-        if (userMutedRef.current || voicePhase === 'speaking') {
-          setMicOn(false);
+        setMicOn(false);
+        if (userMutedRef.current) {
+          setVoicePhase((prev) => (prev === 'listening' || prev === 'transcribing' ? 'idle' : prev));
+          return;
+        }
+        if (voicePhase === 'speaking') {
           return;
         }
         if (autoListeningRef.current) {
-          setMicOn(false);
           setVoicePhase((prev) => (prev === 'listening' ? 'transcribing' : prev));
-          return;
         }
-        setMicOn(false);
       }}
       hideButton
     />

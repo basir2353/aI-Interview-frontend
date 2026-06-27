@@ -17,8 +17,11 @@ const LABELS: Record<VoicePipelinePhase, string> = {
 };
 
 export function InterviewStatusBar({ phase, micOn, detail }: InterviewStatusBarProps) {
-  const label = LABELS[phase];
-  const showPulse = phase === 'listening' || phase === 'thinking' || phase === 'transcribing';
+  const isActivelyListening = phase === 'listening' && micOn;
+  const displayPhase: VoicePipelinePhase = isActivelyListening ? 'listening' : phase === 'listening' ? 'idle' : phase;
+  const label = LABELS[displayPhase];
+  const showPulse =
+    isActivelyListening || phase === 'thinking' || phase === 'transcribing';
 
   return (
     <div className="rounded-2xl border border-[var(--interview-border)] bg-[var(--interview-card)] px-4 py-3 shadow-[var(--interview-shadow)] transition-all duration-300">
