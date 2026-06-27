@@ -25,7 +25,17 @@ export const metadata: Metadata = {
   icons: { icon: '/favicon.svg' },
 };
 
-const themeScript = `(function(){var t=localStorage.getItem('theme');var v=t==='light'?'light':'dark';document.documentElement.setAttribute('data-theme',v);})();`;
+const themeScript = `(function(){
+  var t=localStorage.getItem('theme');
+  var v=t==='light'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',v);
+  var p=(location.pathname||'').replace(/\\/$/,'')||'/';
+  var isRecruiter=p.indexOf('/recruiter')===0&&p!=='/recruiter/login'&&p!=='/recruiter/forgot-password';
+  var isAdmin=p.indexOf('/admin')===0&&p!=='/admin/login';
+  if(isRecruiter||isAdmin){
+    document.documentElement.setAttribute('data-dashboard-app',isAdmin?'admin':'recruiter');
+  }
+})();`;
 
 export default function RootLayout({
   children,

@@ -85,6 +85,37 @@ html[data-dashboard-app] [data-site-header] {
   display: none !important;
 }
 
+/* Dashboard apps always use a light palette — independent of the global dark/light theme toggle */
+html[data-dashboard-app] {
+  --surface-light: #f8fafc;
+  --surface-light-fg: #0f172a;
+  --surface-light-fg-heading: #020617;
+  --surface-light-muted: #64748b;
+  --surface-light-muted-soft: #94a3b8;
+  --surface-light-border: #e2e8f0;
+  --surface-light-card: #ffffff;
+  --surface-light-input: #ffffff;
+
+  --dash-sidebar: #ffffff;
+  --dash-sidebar-active: rgba(124, 58, 237, 0.08);
+  --dash-table-head: #f1f5f9;
+  --dash-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --dash-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-muted: rgba(124, 58, 237, 0.08);
+  --accent-ring: rgba(124, 58, 237, 0.25);
+
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+html[data-dashboard-app] body {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
 /* Interview room — fixed dark palette, independent of site theme toggle */
 [data-interview-room='true'] {
   --interview-bg: #0f0d18;

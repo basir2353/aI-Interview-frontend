@@ -55,7 +55,7 @@ export function DashboardShell({
   }, [sidebarOpen]);
 
   return (
-    <div className="flex min-h-screen bg-[var(--surface-light)] text-[var(--surface-light-fg)]">
+    <div data-dashboard-shell className="flex min-h-screen bg-[var(--surface-light)] text-[var(--surface-light-fg)]">
       <div
         aria-hidden
         className={cn(
