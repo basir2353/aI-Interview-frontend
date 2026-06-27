@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { LogOut, Menu, X } from 'lucide-react';
 import type { NavItem } from '@/components/layout/navConfig';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { cn } from '@/lib/cn';
 import type { LucideIcon } from 'lucide-react';
 
@@ -81,7 +82,7 @@ export function DashboardShell({
           <button
             type="button"
             onClick={closeSidebar}
-            className="rounded-md p-1.5 text-[var(--surface-light-muted)] hover:bg-slate-100 lg:hidden"
+            className="rounded-md p-1.5 text-[var(--surface-light-muted)] hover:bg-[var(--accent-muted)] lg:hidden"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -112,6 +113,10 @@ export function DashboardShell({
         </nav>
 
         <div className="border-t border-[var(--surface-light-border)] p-3">
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
+            <span className="text-xs font-medium text-[var(--surface-light-muted-soft)]">Theme</span>
+            <ThemeToggle />
+          </div>
           <Link
             href="/"
             onClick={closeSidebar}
@@ -132,14 +137,17 @@ export function DashboardShell({
 
       <main className="min-w-0 flex-1 lg:pl-64">
         <div className="border-b border-[var(--surface-light-border)] bg-[var(--dash-sidebar)] px-4 py-3 lg:hidden">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--surface-light-border)] text-[var(--surface-light-fg)]"
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--surface-light-border)] text-[var(--surface-light-fg)]"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <ThemeToggle />
+          </div>
         </div>
 
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -152,7 +160,10 @@ export function DashboardShell({
                 <p className="mt-1 text-sm text-[var(--surface-light-muted)]">{description}</p>
               )}
             </div>
-            {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <ThemeToggle className="hidden lg:flex" />
+              {actions}
+            </div>
           </div>
           <div className="min-w-0">{children}</div>
         </div>
