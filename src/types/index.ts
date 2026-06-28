@@ -9,6 +9,8 @@ export type InterviewRole = 'technical' | 'behavioral' | 'sales' | 'customer_suc
 /** Recruiter-chosen AI presenter; default Ethan. */
 export type InterviewerPersona = 'ethan' | 'zara';
 
+export type InterviewLanguageCode = 'en-US' | 'es' | 'fr' | 'de' | 'hi' | 'ar' | 'ur';
+
 export interface Turn {
   id: string;
   role: 'ai' | 'candidate';
@@ -71,6 +73,8 @@ export interface InterviewState {
   interviewerPersona?: InterviewerPersona;
   /** Company name for intro + interview UI */
   companyName?: string;
+  /** Recruiter-set interview locale (questions, voice, transcription) */
+  interviewLanguage?: InterviewLanguageCode;
 }
 
 export interface ReportCompetency {

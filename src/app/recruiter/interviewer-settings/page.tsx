@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import type { InterviewerPersona } from '@/types';
+import type { InterviewerPersona, InterviewLanguageCode } from '@/types';
+import { INTERVIEW_LANGUAGE_OPTIONS, DEFAULT_INTERVIEW_LANGUAGE, normalizeInterviewLanguage } from '@/lib/interviewLanguages';
 import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -24,6 +25,8 @@ export default function RecruiterInterviewerSettingsPage() {
   const [error, setError] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [interviewerPersona, setInterviewerPersona] = useState<InterviewerPersona>('ethan');
+  const [defaultInterviewLanguage, setDefaultInterviewLanguage] =
+    useState<InterviewLanguageCode>(DEFAULT_INTERVIEW_LANGUAGE);
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
@@ -37,6 +40,9 @@ export default function RecruiterInterviewerSettingsPage() {
       .then(({ recruiter }) => {
         setCompanyName(recruiter.companyName ?? '');
         setInterviewerPersona(recruiter.interviewerPersona ?? 'ethan');
+        setDefaultInterviewLanguage(
+          normalizeInterviewLanguage(recruiter.defaultInterviewLanguage ?? DEFAULT_INTERVIEW_LANGUAGE)
+        );
       })
       .catch(() => {
         localStorage.removeItem('recruiterToken');
@@ -53,6 +59,7 @@ export default function RecruiterInterviewerSettingsPage() {
       await api.recruiterPatchMe({
         companyName: companyName.trim() || null,
         interviewerPersona,
+        defaultInterviewLanguage,
       });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2400);
@@ -131,6 +138,27 @@ export default function RecruiterInterviewerSettingsPage() {
                 ))}
               </div>
             </fieldset>
+
+            <div>
+              <label htmlFor="defaultLanguage" className="mb-1.5 block text-sm font-semibold text-[var(--surface-light-fg)]">
+                Default interview language
+              </label>
+              <select
+                id="defaultLanguage"
+                value={defaultInterviewLanguage}
+                onChange={(e) => setDefaultInterviewLanguage(e.target.value as InterviewLanguageCode)}
+                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-[var(--surface-light-fg)] shadow-sm focus:border-[var(--accent)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-ring)]"
+              >
+                {INTERVIEW_LANGUAGE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-[var(--surface-light-muted)]">
+                Used for new interviews unless you choose another language when scheduling. Supports English, Urdu, Arabic, French, German, Hindi, and Spanish.
+              </p>
+            </div>
 
             {error && (
               <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-2 text-sm text-[var(--error-text)]">{error}</p>

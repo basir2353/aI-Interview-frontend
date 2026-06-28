@@ -2,6 +2,11 @@ export interface TranscribeResponse {
   transcript: string;
 }
 
+export interface TranscribeOptions {
+  /** BCP-47 interview language (e.g. en-US, ur, ar) — sent to STT backend. */
+  language?: string;
+}
+
 function filenameForBlob(blob: Blob): string {
   const type = (blob.type || '').toLowerCase();
   if (type.includes('webm')) return 'recording.webm';
@@ -11,9 +16,16 @@ function filenameForBlob(blob: Blob): string {
   return 'recording.webm';
 }
 
-export async function transcribeAudio(file: Blob, filename?: string): Promise<TranscribeResponse> {
+export async function transcribeAudio(
+  file: Blob,
+  filename?: string,
+  options?: TranscribeOptions
+): Promise<TranscribeResponse> {
   const formData = new FormData();
   formData.append('audio', file, filename || filenameForBlob(file));
+  if (options?.language) {
+    formData.append('language', options.language);
+  }
 
   const response = await fetch('/api/transcribe', {
     method: 'POST',

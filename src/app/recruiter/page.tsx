@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, type AdminScheduleRow, type RecruiterApplication } from '@/lib/api';
-import type { InterviewRole, InterviewerPersona } from '@/types';
+import type { InterviewRole, InterviewerPersona, InterviewLanguageCode } from '@/types';
+import {
+  INTERVIEW_LANGUAGE_OPTIONS,
+  DEFAULT_INTERVIEW_LANGUAGE,
+  interviewLanguageLabel,
+  normalizeInterviewLanguage,
+} from '@/lib/interviewLanguages';
 import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
@@ -109,8 +115,12 @@ export default function RecruiterDashboardPage() {
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const [recruiterCompanyName, setRecruiterCompanyName] = useState<string | null>(null);
   const [defaultInterviewerPersona, setDefaultInterviewerPersona] = useState<InterviewerPersona>('ethan');
+  const [defaultInterviewLanguage, setDefaultInterviewLanguage] =
+    useState<InterviewLanguageCode>(DEFAULT_INTERVIEW_LANGUAGE);
   /** Per-interview override in the create form; resets from profile when the form opens. */
   const [createInterviewerPersona, setCreateInterviewerPersona] = useState<InterviewerPersona>('ethan');
+  const [createInterviewLanguage, setCreateInterviewLanguage] =
+    useState<InterviewLanguageCode>(DEFAULT_INTERVIEW_LANGUAGE);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
   const recruiterName =
@@ -131,6 +141,9 @@ export default function RecruiterDashboardPage() {
         setApplications(appRes.applications);
         setRecruiterCompanyName(meRes.recruiter.companyName ?? null);
         setDefaultInterviewerPersona(meRes.recruiter.interviewerPersona ?? 'ethan');
+        setDefaultInterviewLanguage(
+          normalizeInterviewLanguage(meRes.recruiter.defaultInterviewLanguage ?? DEFAULT_INTERVIEW_LANGUAGE)
+        );
       }
     );
 
@@ -149,8 +162,11 @@ export default function RecruiterDashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    if (createOpen) setCreateInterviewerPersona(defaultInterviewerPersona);
-  }, [createOpen, defaultInterviewerPersona]);
+    if (createOpen) {
+      setCreateInterviewerPersona(defaultInterviewerPersona);
+      setCreateInterviewLanguage(defaultInterviewLanguage);
+    }
+  }, [createOpen, defaultInterviewerPersona, defaultInterviewLanguage]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
@@ -232,6 +248,7 @@ export default function RecruiterDashboardPage() {
         customQuestions: customQuestions.length ? customQuestions : undefined,
         codingQuestions: codingQuestions?.length ? codingQuestions : undefined,
         interviewerPersona: createInterviewerPersona,
+        interviewLanguage: createInterviewLanguage,
       });
       setCreateOpen(false);
       setCandidateEmail('');
@@ -535,6 +552,29 @@ export default function RecruiterDashboardPage() {
                   </div>
                   <div className="sm:col-span-2">
                     <label className="mb-1.5 block text-sm font-medium text-[var(--surface-light-fg)]">
+                      Interview language
+                    </label>
+                    <select
+                      value={createInterviewLanguage}
+                      onChange={(e) => setCreateInterviewLanguage(e.target.value as InterviewLanguageCode)}
+                      className={inputBase}
+                    >
+                      {INTERVIEW_LANGUAGE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1.5 text-xs font-medium text-[var(--surface-light-muted)]">
+                      AI questions, voice, and transcription use this language. Defaults from{' '}
+                      <Link href="/recruiter/interviewer-settings" className="text-[var(--accent)] underline hover:no-underline">
+                        interviewer settings
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1.5 block text-sm font-medium text-[var(--surface-light-fg)]">
                       AI interviewer for this interview
                     </label>
                     <select
@@ -754,6 +794,7 @@ export default function RecruiterDashboardPage() {
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Candidate</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Type</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">AI model</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Language</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Scheduled at</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Status</th>
                   <th className="min-w-[200px] px-5 py-3 font-medium text-[var(--surface-light-muted)]">Actions</th>
@@ -780,6 +821,11 @@ export default function RecruiterDashboardPage() {
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{s.role}</td>
                         <td className="px-6 py-4 text-[var(--surface-light-fg)]">
                           {s.interviewerPersona === 'zara' || s.interviewer_persona === 'zara' ? 'ZaraAlex' : 'Ethan'}
+                        </td>
+                        <td className="px-6 py-4 text-[var(--surface-light-fg)]">
+                          {interviewLanguageLabel(
+                            normalizeInterviewLanguage(s.interviewLanguage ?? s.interview_language ?? DEFAULT_INTERVIEW_LANGUAGE)
+                          )}
                         </td>
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{new Date(s.scheduled_at).toLocaleString()}</td>
                         <td className="px-6 py-4">
@@ -940,6 +986,7 @@ export default function RecruiterDashboardPage() {
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Candidate</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Type</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">AI model</th>
+                  <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Language</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Scheduled at</th>
                   <th className="px-5 py-3 font-medium text-[var(--surface-light-muted)]">Status</th>
                   <th className="min-w-[200px] px-5 py-3 font-medium text-[var(--surface-light-muted)]">Actions</th>
@@ -966,6 +1013,11 @@ export default function RecruiterDashboardPage() {
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{s.role}</td>
                         <td className="px-6 py-4 text-[var(--surface-light-fg)]">
                           {s.interviewerPersona === 'zara' || s.interviewer_persona === 'zara' ? 'ZaraAlex' : 'Ethan'}
+                        </td>
+                        <td className="px-6 py-4 text-[var(--surface-light-fg)]">
+                          {interviewLanguageLabel(
+                            normalizeInterviewLanguage(s.interviewLanguage ?? s.interview_language ?? DEFAULT_INTERVIEW_LANGUAGE)
+                          )}
                         </td>
                         <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{new Date(s.scheduled_at).toLocaleString()}</td>
                         <td className="px-6 py-4">

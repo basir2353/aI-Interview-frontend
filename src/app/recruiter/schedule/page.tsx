@@ -7,7 +7,12 @@ import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api, type RecruiterApplication, type RecruiterCustomQuestionInput } from '@/lib/api';
-import type { InterviewRole, InterviewerPersona } from '@/types';
+import type { InterviewRole, InterviewerPersona, InterviewLanguageCode } from '@/types';
+import {
+  INTERVIEW_LANGUAGE_OPTIONS,
+  DEFAULT_INTERVIEW_LANGUAGE,
+  normalizeInterviewLanguage,
+} from '@/lib/interviewLanguages';
 import {
   CODING_INTERVIEW_MODES,
   formatFocusAreasWithCodingMode,
@@ -69,6 +74,7 @@ export default function RecruiterSchedulePage() {
   const [starterCode, setStarterCode] = useState('');
   const [candidateMessage, setCandidateMessage] = useState('');
   const [interviewerPersona, setInterviewerPersona] = useState<InterviewerPersona>('ethan');
+  const [interviewLanguage, setInterviewLanguage] = useState<InterviewLanguageCode>(DEFAULT_INTERVIEW_LANGUAGE);
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('recruiterToken') : null;
@@ -85,6 +91,9 @@ export default function RecruiterSchedulePage() {
         .recruiterMe()
         .then((meRes) => {
           setInterviewerPersona(meRes.recruiter.interviewerPersona ?? 'ethan');
+          setInterviewLanguage(
+            normalizeInterviewLanguage(meRes.recruiter.defaultInterviewLanguage ?? DEFAULT_INTERVIEW_LANGUAGE)
+          );
           return api.recruiterGetApplications();
         })
         .then((appsRes) => {
@@ -106,6 +115,9 @@ export default function RecruiterSchedulePage() {
     Promise.all([api.recruiterMe(), api.recruiterGetApplications()])
       .then(([meRes, appsRes]) => {
         setInterviewerPersona(meRes.recruiter.interviewerPersona ?? 'ethan');
+        setInterviewLanguage(
+          normalizeInterviewLanguage(meRes.recruiter.defaultInterviewLanguage ?? DEFAULT_INTERVIEW_LANGUAGE)
+        );
         const app = appsRes.applications.find((item) => item.id === applicationId) ?? null;
         if (!app) {
           setError('Application not found or you no longer have access.');
@@ -166,6 +178,7 @@ export default function RecruiterSchedulePage() {
         focusAreas: formatFocusAreasWithCodingMode(codingInterviewMode, focusAreas) || undefined,
         durationMinutes: durationMinutes.trim() ? parseInt(durationMinutes, 10) : undefined,
         interviewerPersona,
+        interviewLanguage,
       });
       setCreatedJoinUrl(created.joinUrl);
     } catch (e) {
@@ -331,6 +344,23 @@ export default function RecruiterSchedulePage() {
                     </option>
                   ))}
                 </select>
+                <div className="md:col-span-2 flex flex-col gap-1">
+                  <label className="text-xs font-medium text-[var(--surface-light-muted)]">Interview language</label>
+                  <select
+                    value={interviewLanguage}
+                    onChange={(e) => setInterviewLanguage(e.target.value as InterviewLanguageCode)}
+                    className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
+                  >
+                    {INTERVIEW_LANGUAGE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[var(--surface-light-muted)]">
+                    Questions, voice, and transcription will use this language for the candidate.
+                  </p>
+                </div>
                 <div className="md:col-span-2 flex flex-col gap-1">
                   <label className="text-xs font-medium text-[var(--surface-light-muted)]">AI interviewer for this slot</label>
                   <select

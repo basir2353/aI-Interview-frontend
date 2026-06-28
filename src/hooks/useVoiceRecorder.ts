@@ -22,6 +22,8 @@ export interface UseVoiceRecorderOptions {
   onTranscript?: (text: string) => void;
   /** Called for any fatal error (permission, conversion, backend). */
   onError?: (message: string, details?: unknown) => void;
+  /** Interview language for STT (BCP-47, e.g. en-US, ur). */
+  transcribeLanguage?: string;
 }
 
 export interface UseVoiceRecorderReturn {
@@ -63,6 +65,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     maxRecordMs = 15000,
     onTranscript,
     onError,
+    transcribeLanguage,
   } = options;
 
   const [status, setStatus] = useState<RecorderStatus>('idle');
@@ -297,7 +300,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           : recorder.mimeType?.includes('wav') ? 'recording.wav'
           : 'recording.webm';
 
-        const { transcript } = await transcribeAudio(rawBlob, uploadName);
+        const { transcript } = await transcribeAudio(rawBlob, uploadName, {
+          language: transcribeLanguage,
+        });
         const text = (transcript || '').trim();
         console.log('[useVoiceRecorder] Transcript:', text);
 

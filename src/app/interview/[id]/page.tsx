@@ -23,6 +23,12 @@ import { setInterviewRoomOnboarding } from '@/lib/interviewOnboardingGate';
 import { useInterviewImmersiveMode } from '@/hooks/useInterviewImmersiveMode';
 import { useInterviewRoomTheme } from '@/hooks/useInterviewRoomTheme';
 import {
+  DEFAULT_INTERVIEW_LANGUAGE,
+  interviewLanguageLabel,
+  normalizeInterviewLanguage,
+  speechSynthesisLang,
+} from '@/lib/interviewLanguages';
+import {
   InterviewStatusBar,
   type VoicePipelinePhase,
 } from '@/components/interview/InterviewStatusBar';
@@ -60,10 +66,11 @@ export default function LiveInterviewPage() {
   const [notepadNotes, setNotepadNotes] = useState('');
   /** When true, user has clicked "Open code" so we show Code tab + editor/terminal even if no coding question yet */
   const [codePanelRequested, setCodePanelRequested] = useState(false);
-  const [interviewLang, setInterviewLang] = useState<string>(() => {
-    if (typeof window === 'undefined') return 'en-US';
-    return window.localStorage.getItem('interviewLanguage') || 'en-US';
-  });
+  const [interviewLang, setInterviewLang] = useState<string>(DEFAULT_INTERVIEW_LANGUAGE);
+  const ttsLang = useMemo(
+    () => speechSynthesisLang(normalizeInterviewLanguage(interviewLang)),
+    [interviewLang]
+  );
   const [voicePhase, setVoicePhase] = useState<VoicePipelinePhase>('idle');
   /** On-screen question text — synced when AI speaks or state updates. */
   const [displayQuestion, setDisplayQuestion] = useState('');
@@ -221,7 +228,7 @@ export default function LiveInterviewPage() {
       }, 200);
     },
     skipTurnIds,
-    lang: interviewLang,
+    lang: ttsLang,
   });
 
   /** Stable refs for intro pipeline — state updates must not cancel in-flight intro TTS. */
@@ -263,6 +270,12 @@ export default function LiveInterviewPage() {
   useEffect(() => {
     loadState();
   }, [loadState]);
+
+  useEffect(() => {
+    if (!state?.interviewLanguage) return;
+    const normalized = normalizeInterviewLanguage(state.interviewLanguage);
+    setInterviewLang(normalized);
+  }, [state?.interviewLanguage]);
 
   useEffect(() => {
     const onboarding = roomPhase === 'device-check' || roomPhase === 'instructions' || roomPhase === 'live';
@@ -620,7 +633,7 @@ export default function LiveInterviewPage() {
 
     const speakSegment = async (text: string, isIntroBeat: boolean) => {
       await speakInterviewerText(text, {
-        lang: interviewLang,
+        lang: ttsLang,
         onStart: () => {
           clearAutoListenTimeoutRef.current();
           autoListeningRef.current = false;
@@ -908,6 +921,7 @@ export default function LiveInterviewPage() {
   const voiceRecorderNode = (
     <AudioRecorder
       ref={audioRecorderRef}
+      transcribeLanguage={interviewLang}
       onTranscript={handleVoiceTranscript}
       silenceMs={2200}
       minRecordMs={600}
@@ -1003,23 +1017,12 @@ export default function LiveInterviewPage() {
               </div>
             )}
           </div>
-          <select
-            value={interviewLang}
-            onChange={(e) => {
-              const v = e.target.value;
-              setInterviewLang(v);
-              if (typeof window !== 'undefined') window.localStorage.setItem('interviewLanguage', v);
-            }}
+          <span
             className="shrink-0 rounded-lg border border-[var(--interview-border)] bg-[var(--interview-card)] px-3 py-1.5 text-sm text-[var(--interview-fg)]"
-            title="Interview language"
+            title="Interview language set by your recruiter"
           >
-            <option value="en-US">English</option>
-            <option value="es">Español</option>
-            <option value="fr">Français</option>
-            <option value="de">Deutsch</option>
-            <option value="hi">हिन्दी</option>
-            <option value="ar">العربية</option>
-          </select>
+            {interviewLanguageLabel(normalizeInterviewLanguage(interviewLang))}
+          </span>
           {showTabBar && (
             <div className="flex w-full min-w-0 shrink-0 basis-full flex-wrap items-center gap-1 rounded-xl border border-[var(--interview-border)] bg-[var(--interview-card)] p-1 shadow-[var(--interview-shadow)] sm:basis-auto sm:w-auto">
               <button

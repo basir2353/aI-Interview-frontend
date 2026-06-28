@@ -25,6 +25,8 @@ interface AudioRecorderProps {
   minSpeechMs?: number;
   maxRecordMs?: number;
   stopDelayMs?: number;
+  /** BCP-47 language for speech-to-text (from schedule). */
+  transcribeLanguage?: string;
 }
 
 export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(function AudioRecorder(
@@ -40,6 +42,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     minSpeechMs: minSpeechMsProp,
     maxRecordMs: maxRecordMsProp,
     stopDelayMs: stopDelayMsProp,
+    transcribeLanguage,
   },
   ref
 ) {
@@ -51,6 +54,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
       stopDelayMs: stopDelayMsProp ?? 180,
       minRecordMs: minRecordMsProp ?? 600,
       minSpeechMs: minSpeechMsProp ?? 400,
+      transcribeLanguage,
       onTranscript: (text) => {
         onTranscript(text);
       },

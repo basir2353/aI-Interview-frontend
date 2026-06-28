@@ -6,6 +6,7 @@
 import type {
   InterviewRole,
   InterviewerPersona,
+  InterviewLanguageCode,
   InterviewState,
   InterviewReport,
   StartInterviewResponse,
@@ -407,7 +408,7 @@ export const api = {
     });
   },
 
-  recruiterPatchMe(body: { companyName?: string | null; interviewerPersona?: InterviewerPersona }) {
+  recruiterPatchMe(body: { companyName?: string | null; interviewerPersona?: InterviewerPersona; defaultInterviewLanguage?: InterviewLanguageCode }) {
     return request<{ recruiter: RecruiterIdentity }>('/recruiter/me', {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -433,6 +434,7 @@ export const api = {
     codingQuestions?: RecruiterCustomQuestionInput[];
     resumeUrl?: string;
     interviewerPersona?: InterviewerPersona;
+    interviewLanguage?: InterviewLanguageCode;
   }) {
     return request<AdminSchedule>('/recruiter/schedule', {
       method: 'POST',
@@ -643,6 +645,7 @@ export const api = {
       focusAreas?: string;
       durationMinutes?: number;
       interviewerPersona?: InterviewerPersona;
+      interviewLanguage?: InterviewLanguageCode;
     }
   ) {
     return request<AdminSchedule>(`/recruiter/applications/${applicationId}/schedule`, {
@@ -786,6 +789,7 @@ export interface RecruiterIdentity {
   name: string | null;
   companyName?: string | null;
   interviewerPersona?: InterviewerPersona;
+  defaultInterviewLanguage?: InterviewLanguageCode;
 }
 
 export interface CandidateIdentity {
@@ -811,6 +815,8 @@ export interface AdminScheduleRow {
   joinUrl: string;
   interviewer_persona?: string | null;
   interviewerPersona?: InterviewerPersona;
+  interview_language?: string | null;
+  interviewLanguage?: InterviewLanguageCode;
 }
 
 export interface AdminQuestionRow {
