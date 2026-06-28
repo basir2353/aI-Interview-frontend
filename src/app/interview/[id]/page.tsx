@@ -13,7 +13,7 @@ import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
 import { waitForSpeechVoices } from '@/lib/voicePreferences';
-import { speakInterviewerText } from '@/lib/interviewerSpeech';
+import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
@@ -228,7 +228,7 @@ export default function LiveInterviewPage() {
       }, 200);
     },
     skipTurnIds,
-    lang: ttsLang,
+    lang: interviewLang,
   });
 
   /** Stable refs for intro pipeline — state updates must not cancel in-flight intro TTS. */
@@ -550,6 +550,7 @@ export default function LiveInterviewPage() {
   }, [stopSpeaking, clearAutoListenTimeout]);
 
   const enterLiveRoom = useCallback(() => {
+    primeInterviewAudio();
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -633,7 +634,7 @@ export default function LiveInterviewPage() {
 
     const speakSegment = async (text: string, isIntroBeat: boolean) => {
       await speakInterviewerText(text, {
-        lang: ttsLang,
+        lang: interviewLang,
         onStart: () => {
           clearAutoListenTimeoutRef.current();
           autoListeningRef.current = false;
@@ -982,7 +983,7 @@ export default function LiveInterviewPage() {
           showCodeTab={showCodeTab}
           codingTurnActive={false}
           showNotepadTab={showNotepadTab}
-          interviewLang={ttsLang}
+          interviewLang={interviewLang}
           onShareScreen={() => void handleStartScreenShare()}
           onSoundsGood={enterLiveRoom}
         />

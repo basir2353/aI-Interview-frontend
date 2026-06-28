@@ -20,14 +20,14 @@ export function normalizeInterviewLanguage(value: unknown): InterviewLanguageCod
   if (INTERVIEW_LANGUAGE_OPTIONS.some((o) => o.value === trimmed)) {
     return trimmed as InterviewLanguageCode;
   }
-  const lower = trimmed.toLowerCase();
-  if (lower === 'en' || lower === 'en-us') return 'en-US';
-  if (lower === 'es') return 'es';
-  if (lower === 'fr') return 'fr';
-  if (lower === 'de') return 'de';
-  if (lower === 'hi') return 'hi';
-  if (lower === 'ar') return 'ar';
-  if (lower === 'ur') return 'ur';
+  const lower = trimmed.toLowerCase().replace('_', '-');
+  if (lower === 'en' || lower.startsWith('en-') || lower === 'english') return 'en-US';
+  if (lower === 'es' || lower.startsWith('es-') || lower === 'spanish' || lower === 'español') return 'es';
+  if (lower === 'fr' || lower.startsWith('fr-') || lower === 'french' || lower === 'français') return 'fr';
+  if (lower === 'de' || lower.startsWith('de-') || lower === 'german' || lower === 'deutsch') return 'de';
+  if (lower === 'hi' || lower.startsWith('hi-') || lower === 'hindi') return 'hi';
+  if (lower === 'ar' || lower.startsWith('ar-') || lower === 'arabic') return 'ar';
+  if (lower === 'ur' || lower.startsWith('ur-') || lower === 'urdu') return 'ur';
   return DEFAULT_INTERVIEW_LANGUAGE;
 }
 

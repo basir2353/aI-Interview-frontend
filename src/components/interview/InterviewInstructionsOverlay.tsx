@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '@/context/ThemeContext';
 import { getInterviewNoteLines, getInterviewNotesSpeechScript } from '@/lib/interviewNoteLines';
-import { speakInterviewerText, cancelInterviewerSpeech } from '@/lib/interviewerSpeech';
+import { speakInterviewerText, cancelInterviewerSpeech, primeInterviewAudio } from '@/lib/interviewerSpeech';
 
 export type InterviewInstructionsOverlayProps = {
   showCodeTab: boolean;
@@ -138,7 +138,10 @@ export function InterviewInstructionsOverlay({
           </button>
           <button
             type="button"
-            onClick={onSoundsGood}
+            onClick={() => {
+              primeInterviewAudio();
+              onSoundsGood();
+            }}
             className={`rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-8 py-3.5 text-sm font-semibold text-white shadow-[0_16px_40px_-12px_rgba(139,92,246,0.55)] transition hover:shadow-[0_20px_48px_-12px_rgba(192,132,252,0.45)] focus:outline-none focus:ring-2 focus:ring-fuchsia-300/80 focus:ring-offset-2 ${primaryFocusRing}`}
           >
             Sounds good — start interview

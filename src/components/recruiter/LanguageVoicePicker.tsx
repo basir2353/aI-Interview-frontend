@@ -8,7 +8,7 @@ import {
   interviewLanguageLabel,
   voicePreviewPhrase,
 } from '@/lib/interviewLanguages';
-import { speakInterviewerText } from '@/lib/interviewerSpeech';
+import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
 
 interface LanguageVoicePickerProps {
   interviewLanguage: InterviewLanguageCode;
@@ -22,6 +22,7 @@ export function LanguageVoicePicker({ interviewLanguage, inputClassName }: Langu
   const langLabel = interviewLanguageLabel(interviewLanguage);
 
   const handleVoicePreview = useCallback(async () => {
+    primeInterviewAudio();
     setIsPreviewingVoice(true);
     try {
       const phrase = voicePreviewPhrase(interviewLanguage);

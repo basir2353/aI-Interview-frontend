@@ -10,6 +10,7 @@ import {
   speakViaServerTts,
   stopServerTtsPlayback,
   setInterviewerSpeaking,
+  primeInterviewAudio,
 } from '@/lib/serverTts';
 
 let speakGeneration = 0;
@@ -149,4 +150,4 @@ export async function speakInterviewerText(
   await speakViaBrowser(trimmed, synthesisLang, generation, options);
 }
 
-export { subscribeInterviewerSpeaking, setInterviewerSpeaking } from '@/lib/serverTts';
+export { subscribeInterviewerSpeaking, setInterviewerSpeaking, primeInterviewAudio } from '@/lib/serverTts';
