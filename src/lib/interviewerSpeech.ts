@@ -1,11 +1,19 @@
 import {
   applyInterviewerSpeechSettings,
   estimateInterviewerSpeechDurationMs,
-  pickPreferredInterviewerVoice,
+  pickInterviewerVoiceForLanguage,
+  primarySpeechLanguage,
   waitForSpeechVoices,
 } from '@/lib/voicePreferences';
+import { normalizeInterviewLanguage, speechSynthesisLang } from '@/lib/interviewLanguages';
 
 let speakGeneration = 0;
+
+function resolveSynthesisLang(lang?: string): string {
+  if (!lang?.trim()) return 'en-US';
+  if (lang.includes('-')) return lang;
+  return speechSynthesisLang(normalizeInterviewLanguage(lang));
+}
 
 /** Cancel any in-progress interviewer TTS. */
 export function cancelInterviewerSpeech(): void {
@@ -44,7 +52,9 @@ export async function speakInterviewerText(
     return;
   }
 
-  await waitForSpeechVoices();
+  await waitForSpeechVoices(primarySpeechLanguage(options?.lang) === 'en' ? 1200 : 2800);
+
+  const synthesisLang = resolveSynthesisLang(options?.lang);
 
   return new Promise<void>((resolve) => {
     let settled = false;
@@ -75,9 +85,16 @@ export async function speakInterviewerText(
 
     const utterance = new SpeechSynthesisUtterance(trimmed);
     const voices = window.speechSynthesis.getVoices();
-    const voice = pickPreferredInterviewerVoice(voices);
-    if (voice) utterance.voice = voice;
-    utterance.lang = options?.lang || voice?.lang || 'en-US';
+    const voice = pickInterviewerVoiceForLanguage(voices, synthesisLang);
+    utterance.lang = synthesisLang;
+    if (voice) {
+      utterance.voice = voice;
+    } else if (primarySpeechLanguage(synthesisLang) !== 'en') {
+      console.warn('[TTS] No installed voice for language; using browser default', {
+        lang: synthesisLang,
+        available: voices.map((v) => `${v.name} (${v.lang})`).slice(0, 8),
+      });
+    }
     applyInterviewerSpeechSettings(utterance);
 
     utterance.onstart = () => {
