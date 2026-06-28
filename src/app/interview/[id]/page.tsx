@@ -151,12 +151,20 @@ export default function LiveInterviewPage() {
       latestAi?.isCodingQuestion || latestAi?.codingStarterCode || latestAi?.codingLanguage
     );
     if (!voiceEnabled || loading || pipelineBusyRef.current || isCodingTurn) return;
+    if (userMutedRef.current) return;
+    if (audioRecorderRef.current?.busy) return;
     if (audioRecorderRef.current?.listening) return;
     clearAutoListenTimeout();
     autoListeningRef.current = true;
 
     const tryStartMic = async (attempt = 0) => {
-      if (!autoListeningRef.current) return;
+      if (!autoListeningRef.current || userMutedRef.current) return;
+      if (audioRecorderRef.current?.busy) {
+        if (attempt < 60) {
+          window.setTimeout(() => void tryStartMic(attempt + 1), 500);
+        }
+        return;
+      }
       const started = (await audioRecorderRef.current?.start()) ?? false;
       if (started) {
         await new Promise((r) => window.setTimeout(r, 100));
@@ -164,8 +172,8 @@ export default function LiveInterviewPage() {
       if (started && audioRecorderRef.current?.listening) {
         return;
       }
-      if (attempt < 8) {
-        window.setTimeout(() => void tryStartMic(attempt + 1), 350);
+      if (attempt < 12) {
+        window.setTimeout(() => void tryStartMic(attempt + 1), 400);
         return;
       }
       autoListeningRef.current = false;
@@ -494,12 +502,21 @@ export default function LiveInterviewPage() {
 
   const handleMicToggle = () => {
     clearAutoListenTimeout();
-    if (micOn || voicePhase === 'listening' || autoListeningRef.current) {
+    const recorder = audioRecorderRef.current;
+    const micActive =
+      micOn ||
+      voicePhase === 'listening' ||
+      voicePhase === 'transcribing' ||
+      autoListeningRef.current ||
+      recorder?.listening ||
+      recorder?.busy;
+    if (micActive) {
       userMutedRef.current = true;
       autoListeningRef.current = false;
-      audioRecorderRef.current?.cancel();
+      recorder?.cancel();
       setMicOn(false);
       setVoicePhase('idle');
+      setError('');
       return;
     }
     userMutedRef.current = false;
@@ -947,26 +964,44 @@ export default function LiveInterviewPage() {
       transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
       transcribeMixed={sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang))}
       onTranscript={handleVoiceTranscript}
+      onProcessing={() => {
+        setMicOn(false);
+        if (!userMutedRef.current) {
+          setVoicePhase('transcribing');
+        }
+      }}
+      onTranscriptionError={(msg) => {
+        autoListeningRef.current = false;
+        clearAutoListenTimeout();
+        setMicOn(false);
+        setVoicePhase('idle');
+        setError(
+          msg.includes('timed out')
+            ? 'Transcription took too long. Please speak a shorter answer and try again.'
+            : 'Transcription failed. Click the mic button and try again.'
+        );
+      }}
       silenceMs={3000}
       minRecordMs={900}
       minSpeechMs={500}
       stopDelayMs={400}
       maxRecordMs={120000}
       onNoSpeech={() => {
-        if (!autoListeningRef.current || !voiceEnabled || loading) return;
+        if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
         if (noSpeechRetryRef.current >= 3) {
           autoListeningRef.current = false;
           setVoicePhase('idle');
           setMicOn(false);
-          setError('I could not hear your answer clearly. Please speak a little louder or unmute your mic.');
+          setError('I could not hear your answer clearly. Please speak a little louder or click the mic to try again.');
           return;
         }
         noSpeechRetryRef.current += 1;
         setError('');
         setTimeout(() => {
-          if (!autoListeningRef.current || loading || !voiceEnabled) return;
+          if (!autoListeningRef.current || loading || !voiceEnabled || userMutedRef.current) return;
+          if (audioRecorderRef.current?.busy) return;
           startAutoListeningWindow();
-        }, 200);
+        }, 600);
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}

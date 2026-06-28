@@ -1,3 +1,5 @@
+import { getBackendOrigin } from '@/lib/backendOrigin';
+
 export interface TranscribeResponse {
   transcript: string;
 }
@@ -18,6 +20,11 @@ function filenameForBlob(blob: Blob): string {
   return 'recording.webm';
 }
 
+/** Call Railway/backend directly so Whisper is not capped by Vercel's 60s serverless limit. */
+function transcribeUrl(): string {
+  return `${getBackendOrigin()}/api/v1/transcribe`;
+}
+
 export async function transcribeAudio(
   file: Blob,
   filename?: string,
@@ -32,10 +39,26 @@ export async function transcribeAudio(
     formData.append('mixed', '1');
   }
 
-  const response = await fetch('/api/transcribe', {
-    method: 'POST',
-    body: formData,
-  });
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 240000);
+
+  let response: Response;
+  try {
+    response = await fetch(transcribeUrl(), {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    window.clearTimeout(timeoutId);
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    throw new Error(
+      isAbort
+        ? 'Transcription timed out. Try a shorter answer or check your connection.'
+        : 'Could not reach transcription service. Check your connection.'
+    );
+  }
+  window.clearTimeout(timeoutId);
 
   const payload = await response.json().catch(() => ({} as Record<string, unknown>));
   if (!response.ok) {

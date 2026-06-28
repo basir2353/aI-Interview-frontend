@@ -23,6 +23,8 @@ export interface UseVoiceRecorderOptions {
   onTranscript?: (text: string) => void;
   /** Called for any fatal error (permission, conversion, backend). */
   onError?: (message: string, details?: unknown) => void;
+  /** Called when recording stops and upload/transcription begins. */
+  onProcessing?: () => void;
   /** Interview language for STT (ISO 639-1: ur, ar, en). */
   transcribeLanguage?: string;
   /** Allow Arabic+English / Urdu+English code-switching on the server. */
@@ -32,6 +34,8 @@ export interface UseVoiceRecorderOptions {
 export interface UseVoiceRecorderReturn {
   status: RecorderStatus;
   isRecording: boolean;
+  isProcessing: boolean;
+  isBusy: boolean;
   error: string | null;
   requestPermission: () => Promise<boolean>;
   /** Acquire mic permission and keep a warm stream for faster later starts. */
@@ -68,12 +72,14 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     maxRecordMs = 15000,
     onTranscript,
     onError,
+    onProcessing,
     transcribeLanguage,
     transcribeMixed,
   } = options;
 
   const [status, setStatus] = useState<RecorderStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const processingRef = useRef(false);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -219,7 +225,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       console.log('[useVoiceRecorder] Already recording — skip duplicate start');
       return true;
     }
-    if (status === 'processing') {
+    if (processingRef.current) {
       console.log('[useVoiceRecorder] Still processing previous clip — skip start');
       return false;
     }
@@ -277,12 +283,15 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       if (skipTranscribeRef.current) {
         skipTranscribeRef.current = false;
         chunksRef.current = [];
+        processingRef.current = false;
         setStatus('idle');
         cleanupRecorderOnly();
         return;
       }
 
+      processingRef.current = true;
       setStatus('processing');
+      onProcessing?.();
       console.log('[useVoiceRecorder] Recording stopped, processing audio');
 
       const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
@@ -290,6 +299,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
       if (!rawBlob.size) {
         const msg = 'No audio detected (empty recording)';
+        processingRef.current = false;
         setStatus('error');
         setError(msg);
         onError?.(msg);
@@ -322,6 +332,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
         if (!text) {
           const msg = 'Empty transcript returned';
+          processingRef.current = false;
           setStatus('error');
           setError(msg);
           onError?.(msg);
@@ -329,11 +340,13 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           return;
         }
 
+        processingRef.current = false;
         setStatus('idle');
         onTranscript?.(text);
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Transcription failed';
         console.error('[useVoiceRecorder] Transcription pipeline error', e);
+        processingRef.current = false;
         setStatus('error');
         setError(msg);
         onError?.(msg, e);
@@ -346,6 +359,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       try {
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         vadAudioCtxRef.current = audioCtx;
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume().catch(() => undefined);
+        }
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 2048;
@@ -452,11 +468,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     minRecordMs,
     minSpeechMs,
     onError,
+    onProcessing,
     onTranscript,
     silenceMs,
     stopDelayMs,
     stop,
-    status,
   ]);
 
   useEffect(() => {
@@ -471,9 +487,14 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     };
   }, [cleanupStream, stop]);
 
+  const isRecording = status === 'recording';
+  const isProcessing = status === 'processing';
+
   return {
     status,
-    isRecording: status === 'recording',
+    isRecording,
+    isProcessing,
+    isBusy: isRecording || isProcessing,
     error,
     requestPermission,
     warmUp,

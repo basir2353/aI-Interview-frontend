@@ -11,11 +11,16 @@ export interface AudioRecorderHandle {
   cancel: () => void;
   warmUp: () => Promise<boolean>;
   listening: boolean;
+  /** Recording or uploading/transcribing — block duplicate mic starts. */
+  busy: boolean;
+  processing: boolean;
 }
 
 interface AudioRecorderProps {
   onTranscript: (text: string) => void;
   onNoSpeech?: () => void;
+  onProcessing?: () => void;
+  onTranscriptionError?: (message: string) => void;
   disabled?: boolean;
   autoStart?: boolean;
   onListeningChange?: (listening: boolean) => void;
@@ -31,10 +36,16 @@ interface AudioRecorderProps {
   transcribeMixed?: boolean;
 }
 
+function isNoSpeechError(message: string): boolean {
+  return /no audio detected|empty recording|empty transcript/i.test(message);
+}
+
 export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(function AudioRecorder(
   {
     onTranscript,
     onNoSpeech,
+    onProcessing,
+    onTranscriptionError,
     disabled,
     autoStart = false,
     onListeningChange,
@@ -49,41 +60,57 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
   },
   ref
 ) {
-  const { start: startVoice, stop: stopVoice, cancel: cancelVoice, warmUp, isRecording, status, error } =
-    useVoiceRecorder({
-      maxRecordMs: maxRecordMsProp ?? 120000,
-      autoStopOnSilence: true,
-      silenceMs: silenceMsProp ?? 2200,
-      stopDelayMs: stopDelayMsProp ?? 180,
-      minRecordMs: minRecordMsProp ?? 600,
-      minSpeechMs: minSpeechMsProp ?? 400,
-      transcribeLanguage,
-      transcribeMixed,
-      onTranscript: (text) => {
-        onTranscript(text);
-      },
-      onError: (message, details) => {
-        console.error('[AudioRecorder] Voice pipeline error:', message, details);
-        if (/permission/i.test(message)) {
-          alert('Could not access microphone. Please check your browser permissions.');
-        }
+  const {
+    start: startVoice,
+    stop: stopVoice,
+    cancel: cancelVoice,
+    warmUp,
+    isRecording,
+    isProcessing,
+    isBusy,
+    status,
+    error,
+  } = useVoiceRecorder({
+    maxRecordMs: maxRecordMsProp ?? 120000,
+    autoStopOnSilence: true,
+    silenceMs: silenceMsProp ?? 2200,
+    stopDelayMs: stopDelayMsProp ?? 180,
+    minRecordMs: minRecordMsProp ?? 600,
+    minSpeechMs: minSpeechMsProp ?? 400,
+    transcribeLanguage,
+    transcribeMixed,
+    onTranscript: (text) => {
+      onTranscript(text);
+    },
+    onProcessing: () => {
+      onProcessing?.();
+    },
+    onError: (message, details) => {
+      console.error('[AudioRecorder] Voice pipeline error:', message, details);
+      if (/permission/i.test(message)) {
+        alert('Could not access microphone. Please check your browser permissions.');
+      }
+      if (isNoSpeechError(message)) {
         onNoSpeech?.();
-      },
-    });
+      } else {
+        onTranscriptionError?.(message);
+      }
+    },
+  });
 
   const toggle = useCallback(() => {
     if (disabled) return;
     if (isRecording) {
       stopVoice();
-    } else {
+    } else if (!isBusy) {
       void startVoice();
     }
-  }, [disabled, isRecording, startVoice, stopVoice]);
+  }, [disabled, isBusy, isRecording, startVoice, stopVoice]);
 
   const start = useCallback(async (): Promise<boolean> => {
-    if (disabled || isRecording) return isRecording;
+    if (disabled || isBusy) return isRecording;
     return startVoice();
-  }, [disabled, isRecording, startVoice]);
+  }, [disabled, isBusy, isRecording, startVoice]);
 
   const stop = useCallback(() => {
     if (!isRecording) return;
@@ -95,10 +122,10 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
   }, [cancelVoice]);
 
   useEffect(() => {
-    if (autoStart && !disabled && !isRecording) {
+    if (autoStart && !disabled && !isBusy) {
       void startVoice();
     }
-  }, [autoStart, disabled, isRecording, startVoice]);
+  }, [autoStart, disabled, isBusy, startVoice]);
 
   useEffect(() => {
     onListeningChange?.(isRecording);
@@ -106,8 +133,17 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
 
   useImperativeHandle(
     ref,
-    () => ({ toggle, start, stop, cancel, warmUp, listening: isRecording }),
-    [toggle, start, stop, cancel, warmUp, isRecording]
+    () => ({
+      toggle,
+      start,
+      stop,
+      cancel,
+      warmUp,
+      listening: isRecording,
+      busy: isBusy,
+      processing: isProcessing,
+    }),
+    [toggle, start, stop, cancel, warmUp, isRecording, isBusy, isProcessing]
   );
 
   if (hideButton) return null;
@@ -120,9 +156,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
       className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-50"
     >
       <span className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-slate-500'}`} />
-      {isRecording ? 'Mic on' : 'Mic off'}
-      {status === 'processing' && <span className="text-xs text-slate-500">(processing)</span>}
-      {error && <span className="text-xs text-rose-400">(error)</span>}
+      {isRecording ? 'Mic on' : isProcessing ? 'Transcribing…' : 'Mic off'}
+      {error && !isNoSpeechError(error) && <span className="text-xs text-rose-400">(error)</span>}
     </button>
   );
 });
