@@ -16,6 +16,7 @@ export default function AdminCandidatesPage() {
   const [editName, setEditName] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
 
   const load = () => api.adminGetCandidates().then((r) => setCandidates(r.candidates));
 
@@ -67,6 +68,20 @@ export default function AdminCandidatesPage() {
     }
   };
 
+  const handleDelete = async (c: AdminCandidateRow) => {
+    if (!confirm(`Delete candidate ${c.email || c.name || c.id}? This cannot be undone.`)) return;
+    setError('');
+    setDeleteLoadingId(c.id);
+    try {
+      await api.adminDeleteCandidate(c.id);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete candidate');
+    } finally {
+      setDeleteLoadingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--surface-light)]">
@@ -79,7 +94,7 @@ export default function AdminCandidatesPage() {
   }
 
   return (
-    <AdminShell title="Candidates" description="All candidates who have applied or been scheduled. Super admin can edit name and set password.">
+    <AdminShell title="Candidates" description="All candidates who have applied or been scheduled. Edit name, set password, or delete when no interviews exist.">
       <div className="space-y-4">
         {error && (
           <div className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">
@@ -89,7 +104,7 @@ export default function AdminCandidatesPage() {
         <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
           <div className="border-b border-[var(--surface-light-border)] px-4 py-4 sm:px-6">
             <h3 className="font-semibold text-[var(--surface-light-fg)]">All candidates</h3>
-            <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">{candidates.length} total. Super admin can edit name and set/reset password.</p>
+            <p className="mt-0.5 text-sm text-[var(--surface-light-muted)]">{candidates.length} total. Edit name, reset password, or delete (if no interview history).</p>
           </div>
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <table className="w-full min-w-[400px] text-left text-sm">
@@ -110,13 +125,23 @@ export default function AdminCandidatesPage() {
                     <td className="px-4 py-3 text-[var(--surface-light-fg)] sm:px-6 sm:py-4">{c.application_count}</td>
                     <td className="px-4 py-3 text-[var(--surface-light-muted)] sm:px-6 sm:py-4">{new Date(c.created_at).toLocaleString()}</td>
                     <td className="px-4 py-3 sm:px-6 sm:py-4">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(c)}
-                        className="text-sm font-medium text-[var(--accent)] hover:underline"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(c)}
+                          className="text-sm font-medium text-[var(--accent)] hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(c)}
+                          disabled={deleteLoadingId === c.id}
+                          className="text-sm font-medium text-[var(--error-text)] hover:underline disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -137,7 +162,7 @@ export default function AdminCandidatesPage() {
           >
             <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Edit candidate</h3>
             <p className="mt-1 text-sm text-[var(--surface-light-muted)]">
-              {editCandidate.email || 'No email'} — Set name and/or new password (super admin only).
+              {editCandidate.email || 'No email'} — Set name and/or new password.
             </p>
             <form onSubmit={handleSave} className="mt-5 space-y-4">
               <div>

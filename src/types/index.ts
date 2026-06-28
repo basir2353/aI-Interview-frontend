@@ -69,6 +69,8 @@ export interface InterviewState {
   approximateTokens: number;
   /** AI interviewer persona from schedule / recruiter settings */
   interviewerPersona?: InterviewerPersona;
+  /** Company name for intro + interview UI */
+  companyName?: string;
 }
 
 export interface ReportCompetency {

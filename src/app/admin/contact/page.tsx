@@ -67,6 +67,17 @@ export default function AdminContactPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this message permanently?')) return;
+    try {
+      await api.adminDeleteContactSubmission(id);
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      if (selected?.id === id) setSelected(null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Delete failed');
+    }
+  };
+
   if (loading) {
     return <DashboardLoading message="Loading contact messages…" />;
   }
@@ -173,6 +184,15 @@ export default function AdminContactPage() {
                     Mark {status}
                   </Button>
                 ))}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  className="border-[var(--error-border)] text-[var(--error-text)]"
+                  onClick={() => void handleDelete(selected.id)}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           ) : (

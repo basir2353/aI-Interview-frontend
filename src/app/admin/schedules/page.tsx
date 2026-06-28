@@ -13,6 +13,12 @@ export default function AdminSchedulesPage() {
   const [schedules, setSchedules] = useState<AdminScheduleRow[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [editSchedule, setEditSchedule] = useState<AdminScheduleRow | null>(null);
+  const [editScheduledAt, setEditScheduledAt] = useState('');
+  const [editCandidateEmail, setEditCandidateEmail] = useState('');
+  const [editCandidateName, setEditCandidateName] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const load = () =>
     api.adminGetSchedules(statusFilter || undefined).then((r) => setSchedules(r.schedules));
@@ -39,6 +45,41 @@ export default function AdminSchedulesPage() {
     }
   };
 
+  const openEdit = (s: AdminScheduleRow) => {
+    setEditSchedule(s);
+    const d = new Date(s.scheduled_at);
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setEditScheduledAt(local);
+    setEditCandidateEmail(s.candidate_email);
+    setEditCandidateName(s.candidate_name || '');
+    setError('');
+  };
+
+  const closeEdit = () => {
+    setEditSchedule(null);
+    setError('');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editSchedule) return;
+    setEditLoading(true);
+    setError('');
+    try {
+      await api.adminUpdateSchedule(editSchedule.id, {
+        scheduledAt: new Date(editScheduledAt).toISOString(),
+        candidateEmail: editCandidateEmail.trim(),
+        candidateName: editCandidateName.trim() || undefined,
+      });
+      closeEdit();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update schedule');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Permanently delete this schedule?')) return;
     setActionLoading(id);
@@ -62,7 +103,12 @@ export default function AdminSchedulesPage() {
   }
 
   return (
-    <AdminShell title="Schedules" description="All scheduled interviews. Copy link, update status, or cancel.">
+    <AdminShell title="Schedules" description="All scheduled interviews. Edit details, copy link, update status, or delete.">
+      {error && !editSchedule && (
+        <div className="mb-4 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">
+          {error}
+        </div>
+      )}
       <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-0 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--surface-light-border)] px-4 py-4 sm:px-6">
           <div>
@@ -119,6 +165,14 @@ export default function AdminSchedulesPage() {
                             Copy link
                           </button>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => openEdit(s)}
+                          disabled={actionLoading === s.id}
+                          className="rounded-full border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-1.5 text-xs font-semibold text-[var(--surface-light-fg)] hover:bg-[var(--accent-muted)] disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
                         {s.interview_id && (
                           <Link
                             href={`/report/${s.interview_id}`}
@@ -157,6 +211,63 @@ export default function AdminSchedulesPage() {
           <div className="px-4 py-12 text-center text-sm text-[var(--surface-light-muted)] sm:px-6">No schedules match the filter.</div>
         )}
       </Card>
+
+      {editSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeEdit}>
+          <div
+            className="w-full max-w-md rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Edit schedule</h3>
+            {error && (
+              <p className="mt-2 text-sm text-[var(--error-text)]">{error}</p>
+            )}
+            <form onSubmit={handleSaveEdit} className="mt-5 space-y-4">
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-[var(--surface-light-fg)]">Scheduled at</span>
+                <input
+                  type="datetime-local"
+                  value={editScheduledAt}
+                  onChange={(e) => setEditScheduledAt(e.target.value)}
+                  required
+                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-[var(--surface-light-fg)]">Candidate email</span>
+                <input
+                  type="email"
+                  value={editCandidateEmail}
+                  onChange={(e) => setEditCandidateEmail(e.target.value)}
+                  required
+                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-[var(--surface-light-fg)]">Candidate name</span>
+                <input
+                  type="text"
+                  value={editCandidateName}
+                  onChange={(e) => setEditCandidateName(e.target.value)}
+                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm"
+                />
+              </label>
+              <div className="flex gap-3">
+                <button type="button" onClick={closeEdit} className="flex-1 rounded-xl border border-[var(--surface-light-border)] px-4 py-2 text-sm font-semibold">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="flex-1 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {editLoading ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminShell>
   );
 }

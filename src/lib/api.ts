@@ -188,7 +188,12 @@ export const api = {
     });
   },
 
-  adminUpdateSchedule(id: string, updates: { scheduledAt?: string; status?: string }) {
+  adminUpdateSchedule(id: string, updates: {
+    scheduledAt?: string;
+    status?: string;
+    candidateEmail?: string;
+    candidateName?: string;
+  }) {
     return request<{ updated: boolean }>(`/admin/schedule/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
@@ -301,8 +306,30 @@ export const api = {
     });
   },
 
+  adminDeleteCandidate(id: string) {
+    return request<{ deleted: boolean }>(`/admin/candidates/${id}`, {
+      method: 'DELETE',
+      headers: adminAuthHeaders(),
+    });
+  },
+
   adminGetApplications() {
     return request<{ applications: AdminApplicationRow[] }>('/admin/applications', {
+      headers: adminAuthHeaders(),
+    });
+  },
+
+  adminUpdateApplication(id: string, body: { status: AdminApplicationStatus }) {
+    return request<{ application: { id: string; status: string } }>(`/admin/applications/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: adminAuthHeaders(),
+    });
+  },
+
+  adminDeleteApplication(id: string) {
+    return request<{ deleted: boolean }>(`/admin/applications/${id}`, {
+      method: 'DELETE',
       headers: adminAuthHeaders(),
     });
   },
@@ -335,6 +362,13 @@ export const api = {
     return request<{ submission: ContactSubmissionRow }>(`/admin/contact-submissions/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+      headers: adminAuthHeaders(),
+    });
+  },
+
+  adminDeleteContactSubmission(id: string) {
+    return request<{ deleted: boolean }>(`/admin/contact-submissions/${id}`, {
+      method: 'DELETE',
       headers: adminAuthHeaders(),
     });
   },
@@ -862,6 +896,8 @@ export interface AdminApplicationRow {
   recruiter_email: string | null;
   recruiter_name: string | null;
 }
+
+export type AdminApplicationStatus = 'pending' | 'interview_scheduled' | 'rejected' | 'accepted';
 
 export interface AdminRecruiterCreateResponse {
   id: string;

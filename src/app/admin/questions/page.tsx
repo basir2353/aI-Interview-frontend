@@ -19,6 +19,8 @@ export default function AdminQuestionsPage() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [editQuestion, setEditQuestion] = useState<AdminQuestionRow | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
   const [newQ, setNewQ] = useState({ role: 'technical', phase: 'technical', difficulty: 'medium', text: '', isCodingQuestion: false });
 
   const load = () =>
@@ -48,6 +50,30 @@ export default function AdminQuestionsPage() {
       await load();
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  const openEdit = (q: AdminQuestionRow) => {
+    setEditQuestion(q);
+  };
+
+  const closeEdit = () => setEditQuestion(null);
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editQuestion) return;
+    setEditLoading(true);
+    try {
+      await api.adminUpdateQuestion(editQuestion.id, {
+        phase: editQuestion.phase,
+        difficulty: editQuestion.difficulty,
+        text: editQuestion.text,
+        isCodingQuestion: editQuestion.is_coding_question,
+      });
+      closeEdit();
+      await load();
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -217,14 +243,23 @@ export default function AdminQuestionsPage() {
                   </td>
                   <td className="px-4 py-3 text-[var(--surface-light-muted)] sm:px-6 sm:py-4">{q.is_coding_question ? 'Yes' : '—'}</td>
                   <td className="px-4 py-3 sm:px-6 sm:py-4">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(q.id)}
-                      disabled={actionLoadingId === q.id}
-                      className="rounded-full border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--error-text)] hover:opacity-90 disabled:opacity-50"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(q)}
+                        className="rounded-full border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-1.5 text-xs font-semibold text-[var(--surface-light-fg)] hover:bg-[var(--accent-muted)]"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(q.id)}
+                        disabled={actionLoadingId === q.id}
+                        className="rounded-full border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-1.5 text-xs font-semibold text-[var(--error-text)] hover:opacity-90 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -237,6 +272,79 @@ export default function AdminQuestionsPage() {
           </div>
         )}
       </Card>
+
+      {editQuestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeEdit}>
+          <div
+            className="w-full max-w-lg rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Edit question</h3>
+            <p className="mt-1 text-sm text-[var(--surface-light-muted)]">Role: {editQuestion.role}</p>
+            <form onSubmit={handleUpdate} className="mt-5 space-y-4">
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-[var(--surface-light-fg)]">Phase</span>
+                <select
+                  value={editQuestion.phase}
+                  onChange={(e) => setEditQuestion((q) => (q ? { ...q, phase: e.target.value } : q))}
+                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm"
+                >
+                  {PHASES.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-[var(--surface-light-fg)]">Difficulty</span>
+                <select
+                  value={editQuestion.difficulty}
+                  onChange={(e) => setEditQuestion((q) => (q ? { ...q, difficulty: e.target.value } : q))}
+                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm"
+                >
+                  {DIFFICULTIES.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-medium text-[var(--surface-light-fg)]">Question text</span>
+                <textarea
+                  value={editQuestion.text}
+                  onChange={(e) => setEditQuestion((q) => (q ? { ...q, text: e.target.value } : q))}
+                  rows={4}
+                  required
+                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={editQuestion.is_coding_question}
+                  onChange={(e) => setEditQuestion((q) => (q ? { ...q, is_coding_question: e.target.checked } : q))}
+                  className="h-4 w-4 rounded border-[var(--surface-light-border)]"
+                />
+                <span className="text-sm text-[var(--surface-light-fg)]">Coding question</span>
+              </label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeEdit}
+                  className="flex-1 rounded-xl border border-[var(--surface-light-border)] px-4 py-2 text-sm font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading || !editQuestion.text.trim()}
+                  className="flex-1 rounded-xl bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {editLoading ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </AdminShell>
   );
 }

@@ -370,14 +370,6 @@ input.ui-time::-webkit-outer-spin-button {
   display: none;
 }
 
-[data-interview-room='true'] .intervion-logo-on-light {
-  display: none;
-}
-
-[data-interview-room='true'] .intervion-logo-on-dark {
-  display: block;
-}
-
 @layer components {
   .dash-card.dash-feature-card {
     border-color: color-mix(in srgb, var(--accent) 22%, var(--surface-light-border));

@@ -879,10 +879,14 @@ export default function LiveInterviewPage() {
   const showNotepadTab = Boolean(!showCodeTab);
   /** Recruiter default is Ethan; `zara` only when explicitly set on the schedule. */
   const interviewerPersona = state.interviewerPersona === 'zara' ? 'zara' : 'ethan';
-  const interviewerDisplayName =
-    interviewerPersona === 'zara' ? 'ZaraAlex (Intervion AI)' : 'Ethan (Intervion AI)';
   const interviewerFirstName = interviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan';
   const interviewerInitial = interviewerPersona === 'zara' ? 'Z' : 'E';
+  const interviewerSubtitle = state.companyName?.trim() || 'Intervion AI';
+  const interviewerDisplayName = state.companyName?.trim()
+    ? `${interviewerFirstName} · ${state.companyName.trim()}`
+    : interviewerPersona === 'zara'
+      ? 'ZaraAlex (Intervion AI)'
+      : 'Ethan (Intervion AI)';
   /** Always show Interview + (Code or Notepad) tab bar when we have interview state. */
   const showTabBar = true;
   /** When true, use 50/50 split: left = interview, right = code editor + terminal. */
@@ -983,9 +987,21 @@ export default function LiveInterviewPage() {
       )}
       <header className="shrink-0 flex flex-col gap-3 border-b border-[var(--interview-border)] bg-[var(--interview-card)]/90 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            <IntervionLogo className="h-7 sm:h-8" />
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <IntervionLogo variant="on-dark" className="h-7 sm:h-8" />
+            </div>
+            {(state.companyName || state.positionTitle) && (
+              <div className="hidden min-w-0 border-l border-[var(--interview-border)] pl-3 sm:block">
+                {state.companyName && (
+                  <p className="truncate text-sm font-semibold text-[var(--interview-fg)]">{state.companyName}</p>
+                )}
+                {state.positionTitle && (
+                  <p className="truncate text-xs text-[var(--interview-muted)]">{state.positionTitle}</p>
+                )}
+              </div>
+            )}
           </div>
           <select
             value={interviewLang}
@@ -1061,7 +1077,7 @@ export default function LiveInterviewPage() {
                   <AIAvatar
                     videoUrl={lastAiTurn.avatarVideo}
                     name={interviewerFirstName}
-                    subtitle="Intervion AI"
+                    subtitle={interviewerSubtitle}
                     size="sm"
                     presentation="orb"
                     initialLetter={interviewerInitial}
@@ -1069,7 +1085,7 @@ export default function LiveInterviewPage() {
                 ) : (
                   <AIAvatar
                     name={interviewerFirstName}
-                    subtitle="Intervion AI"
+                    subtitle={interviewerSubtitle}
                     size="sm"
                     presentation="orb"
                     initialLetter={interviewerInitial}
@@ -1189,7 +1205,7 @@ export default function LiveInterviewPage() {
                     <AIAvatar
                       videoUrl={lastAiTurn.avatarVideo}
                       name={interviewerFirstName}
-                      subtitle="Intervion AI"
+                      subtitle={interviewerSubtitle}
                       size="lg"
                       presentation="orb"
                       initialLetter={interviewerInitial}
@@ -1197,7 +1213,7 @@ export default function LiveInterviewPage() {
                   ) : (
                     <AIAvatar
                       name={interviewerFirstName}
-                      subtitle="Intervion AI"
+                      subtitle={interviewerSubtitle}
                       size="lg"
                       presentation="orb"
                       initialLetter={interviewerInitial}
