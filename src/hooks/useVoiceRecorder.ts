@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { transcribeAudio } from '@/lib/transcribeApi';
+import { encodeBlobTo16kMonoWav } from '@/lib/audioEncode';
 
 type RecorderStatus = 'idle' | 'recording' | 'processing' | 'error';
 
@@ -22,8 +23,10 @@ export interface UseVoiceRecorderOptions {
   onTranscript?: (text: string) => void;
   /** Called for any fatal error (permission, conversion, backend). */
   onError?: (message: string, details?: unknown) => void;
-  /** Interview language for STT (BCP-47, e.g. en-US, ur). */
+  /** Interview language for STT (ISO 639-1: ur, ar, en). */
   transcribeLanguage?: string;
+  /** Allow Arabic+English / Urdu+English code-switching on the server. */
+  transcribeMixed?: boolean;
 }
 
 export interface UseVoiceRecorderReturn {
@@ -66,6 +69,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     onTranscript,
     onError,
     transcribeLanguage,
+    transcribeMixed,
   } = options;
 
   const [status, setStatus] = useState<RecorderStatus>('idle');
@@ -294,14 +298,24 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       }
 
       try {
-        const uploadName =
-          recorder.mimeType?.includes('ogg') ? 'recording.ogg'
-          : recorder.mimeType?.includes('mp4') ? 'recording.mp4'
-          : recorder.mimeType?.includes('wav') ? 'recording.wav'
-          : 'recording.webm';
+        let uploadBlob: Blob = rawBlob;
+        let uploadName = 'recording.webm';
+        try {
+          uploadBlob = await encodeBlobTo16kMonoWav(rawBlob);
+          uploadName = 'recording.wav';
+          console.log('[useVoiceRecorder] Encoded WAV size:', uploadBlob.size);
+        } catch (encodeErr) {
+          console.warn('[useVoiceRecorder] WAV encode failed, sending original', encodeErr);
+          uploadName =
+            recorder.mimeType?.includes('ogg') ? 'recording.ogg'
+            : recorder.mimeType?.includes('mp4') ? 'recording.mp4'
+            : recorder.mimeType?.includes('wav') ? 'recording.wav'
+            : 'recording.webm';
+        }
 
-        const { transcript } = await transcribeAudio(rawBlob, uploadName, {
+        const { transcript } = await transcribeAudio(uploadBlob, uploadName, {
           language: transcribeLanguage,
+          mixed: transcribeMixed,
         });
         const text = (transcript || '').trim();
         console.log('[useVoiceRecorder] Transcript:', text);

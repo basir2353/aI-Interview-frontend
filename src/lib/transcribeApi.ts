@@ -3,8 +3,10 @@ export interface TranscribeResponse {
 }
 
 export interface TranscribeOptions {
-  /** BCP-47 interview language (e.g. en-US, ur, ar) — sent to STT backend. */
+  /** ISO 639-1 / interview code for STT (e.g. ur, ar, en). */
   language?: string;
+  /** When true, backend may merge primary-language + auto-detect passes. */
+  mixed?: boolean;
 }
 
 function filenameForBlob(blob: Blob): string {
@@ -25,6 +27,9 @@ export async function transcribeAudio(
   formData.append('audio', file, filename || filenameForBlob(file));
   if (options?.language) {
     formData.append('language', options.language);
+  }
+  if (options?.mixed) {
+    formData.append('mixed', '1');
   }
 
   const response = await fetch('/api/transcribe', {

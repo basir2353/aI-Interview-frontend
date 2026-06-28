@@ -88,7 +88,18 @@ export function cloudTtsVoiceLabel(
   return labels[code] ?? labels['en-US'];
 }
 
-/** STT language — auto-detect handles Arabic+English, Urdu+English, etc. */
-export function sttLanguageForInterview(_code?: InterviewLanguageCode): string {
-  return 'auto';
+/** Whisper.cpp / OpenAI STT ISO 639-1 code for transcription. */
+export function whisperSttLanguage(code: InterviewLanguageCode): string {
+  if (code === 'en-US') return 'en';
+  return code;
+}
+
+/** Primary STT language from interview locale (better than auto for Urdu/Arabic). */
+export function sttLanguageForInterview(code?: InterviewLanguageCode): string {
+  return whisperSttLanguage(normalizeInterviewLanguage(code ?? DEFAULT_INTERVIEW_LANGUAGE));
+}
+
+/** Non-English interviews may mix English — backend runs a second auto pass when true. */
+export function sttAllowsMixedLanguage(code?: InterviewLanguageCode): boolean {
+  return normalizeInterviewLanguage(code ?? DEFAULT_INTERVIEW_LANGUAGE) !== 'en-US';
 }

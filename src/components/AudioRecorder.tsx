@@ -25,8 +25,10 @@ interface AudioRecorderProps {
   minSpeechMs?: number;
   maxRecordMs?: number;
   stopDelayMs?: number;
-  /** BCP-47 language for speech-to-text (from schedule). */
+  /** ISO 639-1 language for STT (ur, ar, en). */
   transcribeLanguage?: string;
+  /** Allow mixed-language answers (e.g. Arabic + English). */
+  transcribeMixed?: boolean;
 }
 
 export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(function AudioRecorder(
@@ -43,6 +45,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     maxRecordMs: maxRecordMsProp,
     stopDelayMs: stopDelayMsProp,
     transcribeLanguage,
+    transcribeMixed,
   },
   ref
 ) {
@@ -55,6 +58,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
       minRecordMs: minRecordMsProp ?? 600,
       minSpeechMs: minSpeechMsProp ?? 400,
       transcribeLanguage,
+      transcribeMixed,
       onTranscript: (text) => {
         onTranscript(text);
       },

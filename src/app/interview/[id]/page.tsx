@@ -32,6 +32,7 @@ import {
   normalizeInterviewLanguage,
   speechSynthesisLang,
   sttLanguageForInterview,
+  sttAllowsMixedLanguage,
 } from '@/lib/interviewLanguages';
 import {
   InterviewStatusBar,
@@ -944,12 +945,13 @@ export default function LiveInterviewPage() {
     <AudioRecorder
       ref={audioRecorderRef}
       transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
+      transcribeMixed={sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang))}
       onTranscript={handleVoiceTranscript}
-      silenceMs={2200}
-      minRecordMs={600}
-      minSpeechMs={400}
+      silenceMs={3000}
+      minRecordMs={900}
+      minSpeechMs={500}
+      stopDelayMs={400}
       maxRecordMs={120000}
-      stopDelayMs={180}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading) return;
         if (noSpeechRetryRef.current >= 3) {
