@@ -55,3 +55,18 @@ export function speechSynthesisLang(code: InterviewLanguageCode): string {
   if (code === 'ar') return 'ar-SA';
   return code;
 }
+
+/** Cloud TTS voice labels (Microsoft Edge neural — works in every browser). */
+export const CLOUD_TTS_VOICE_LABEL: Record<InterviewLanguageCode, string> = {
+  'en-US': 'Jenny (English)',
+  es: 'Elvira (Español)',
+  fr: 'Denise (Français)',
+  de: 'Katja (Deutsch)',
+  hi: 'Swara (हिन्दी)',
+  ar: 'Zariyah (العربية)',
+  ur: 'Uzma (اردو)',
+};
+
+export function cloudTtsVoiceLabel(code: InterviewLanguageCode): string {
+  return CLOUD_TTS_VOICE_LABEL[code] ?? CLOUD_TTS_VOICE_LABEL['en-US'];
+}

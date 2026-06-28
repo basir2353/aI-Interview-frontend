@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { subscribeInterviewerSpeaking } from '@/lib/interviewerSpeech';
 
 interface AIAvatarProps {
   name?: string;
@@ -19,11 +20,17 @@ export function AIAvatar({ name = 'Ethan', subtitle = 'Intervion AI', size = 'lg
   const [blink, setBlink] = useState(false);
   const [mouth, setMouth] = useState(0); // 0 = closed, 1 = fully open
 
-  // Poll browser TTS state
+  // Poll cloud + browser TTS speaking state
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const iv = setInterval(() => setIsSpeaking(window.speechSynthesis.speaking), 50);
-    return () => clearInterval(iv);
+    if (typeof window === 'undefined') return;
+    const unsub = subscribeInterviewerSpeaking(setIsSpeaking);
+    const iv = setInterval(() => {
+      if (window.speechSynthesis?.speaking) setIsSpeaking(true);
+    }, 50);
+    return () => {
+      unsub();
+      clearInterval(iv);
+    };
   }, []);
 
   // Random blink every 2.5–5.5 s

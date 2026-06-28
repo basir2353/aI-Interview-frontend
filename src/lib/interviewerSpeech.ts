@@ -6,6 +6,11 @@ import {
   waitForSpeechVoices,
 } from '@/lib/voicePreferences';
 import { normalizeInterviewLanguage, speechSynthesisLang } from '@/lib/interviewLanguages';
+import {
+  speakViaServerTts,
+  stopServerTtsPlayback,
+  setInterviewerSpeaking,
+} from '@/lib/serverTts';
 
 let speakGeneration = 0;
 
@@ -15,17 +20,86 @@ function resolveSynthesisLang(lang?: string): string {
   return speechSynthesisLang(normalizeInterviewLanguage(lang));
 }
 
-/** Cancel any in-progress interviewer TTS. */
-export function cancelInterviewerSpeech(): void {
-  speakGeneration += 1;
+function resolveInterviewLanguageCode(lang?: string) {
+  return normalizeInterviewLanguage(lang || 'en-US');
+}
+
+function stopCurrentPlayback(): void {
+  stopServerTtsPlayback();
+  setInterviewerSpeaking(false);
   if (typeof window !== 'undefined' && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
 }
 
+/** Cancel any in-progress interviewer TTS (cloud + browser). */
+export function cancelInterviewerSpeech(): void {
+  speakGeneration += 1;
+  stopCurrentPlayback();
+}
+
+async function speakViaBrowser(
+  trimmed: string,
+  synthesisLang: string,
+  generation: number,
+  options?: { onStart?: () => void; onEnd?: () => void }
+): Promise<void> {
+  if (!window.speechSynthesis) {
+    options?.onStart?.();
+    options?.onEnd?.();
+    return;
+  }
+
+  await waitForSpeechVoices(primarySpeechLanguage(synthesisLang) === 'en' ? 1200 : 2800);
+
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    let resumeInterval: ReturnType<typeof setInterval> | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const done = () => {
+      if (settled || generation !== speakGeneration) return;
+      settled = true;
+      if (resumeInterval) clearInterval(resumeInterval);
+      if (timeoutId) clearTimeout(timeoutId);
+      setInterviewerSpeaking(false);
+      options?.onEnd?.();
+      resolve();
+    };
+
+    resumeInterval = setInterval(() => {
+      if (generation !== speakGeneration) return;
+      const synth = window.speechSynthesis;
+      if (synth.paused) synth.resume();
+    }, 800);
+
+    timeoutId = setTimeout(() => {
+      if (generation !== speakGeneration || settled) return;
+      window.speechSynthesis.cancel();
+      done();
+    }, estimateInterviewerSpeechDurationMs(trimmed));
+
+    const utterance = new SpeechSynthesisUtterance(trimmed);
+    const voices = window.speechSynthesis.getVoices();
+    const voice = pickInterviewerVoiceForLanguage(voices, synthesisLang);
+    utterance.lang = synthesisLang;
+    if (voice) utterance.voice = voice;
+    applyInterviewerSpeechSettings(utterance);
+
+    utterance.onstart = () => {
+      if (generation !== speakGeneration) return;
+      setInterviewerSpeaking(true);
+      options?.onStart?.();
+    };
+    utterance.onend = done;
+    utterance.onerror = done;
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 /**
- * Speak interviewer text in one continuous utterance (no extra pauses).
- * Slightly slower rate than browser default — speed only, same flow as before.
+ * Speak interviewer text using cloud TTS (all languages, all browsers).
+ * Falls back to browser Speech Synthesis if the server is unreachable.
  */
 export async function speakInterviewerText(
   text: string,
@@ -42,67 +116,37 @@ export async function speakInterviewerText(
   }
 
   const generation = ++speakGeneration;
-  if (window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
+  stopCurrentPlayback();
 
-  if (!window.speechSynthesis) {
-    options?.onStart?.();
-    options?.onEnd?.();
-    return;
-  }
-
-  await waitForSpeechVoices(primarySpeechLanguage(options?.lang) === 'en' ? 1200 : 2800);
-
+  const interviewLang = resolveInterviewLanguageCode(options?.lang);
   const synthesisLang = resolveSynthesisLang(options?.lang);
 
-  return new Promise<void>((resolve) => {
-    let settled = false;
-    let resumeInterval: ReturnType<typeof setInterval> | null = null;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const serverTimeoutMs = Math.min(120000, estimateInterviewerSpeechDurationMs(trimmed) + 15000);
 
-    const done = () => {
-      if (settled || generation !== speakGeneration) return;
-      settled = true;
-      if (resumeInterval) clearInterval(resumeInterval);
-      if (timeoutId) clearTimeout(timeoutId);
-      options?.onEnd?.();
-      resolve();
-    };
+  try {
+    await Promise.race([
+      speakViaServerTts(trimmed, interviewLang, {
+        onStart: () => {
+          if (generation !== speakGeneration) return;
+          options?.onStart?.();
+        },
+        onEnd: () => {
+          if (generation !== speakGeneration) return;
+          options?.onEnd?.();
+        },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Server TTS timeout')), serverTimeoutMs)
+      ),
+    ]);
+    return;
+  } catch (err) {
+    if (generation !== speakGeneration) return;
+    console.warn('[TTS] Cloud TTS unavailable, using browser fallback', err);
+  }
 
-    resumeInterval = setInterval(() => {
-      if (generation !== speakGeneration) return;
-      const synth = window.speechSynthesis;
-      if (synth.paused) synth.resume();
-    }, 800);
-
-    timeoutId = setTimeout(() => {
-      if (generation !== speakGeneration || settled) return;
-      console.warn('[TTS] Utterance timeout — advancing pipeline', { preview: trimmed.slice(0, 72) });
-      window.speechSynthesis.cancel();
-      done();
-    }, estimateInterviewerSpeechDurationMs(trimmed));
-
-    const utterance = new SpeechSynthesisUtterance(trimmed);
-    const voices = window.speechSynthesis.getVoices();
-    const voice = pickInterviewerVoiceForLanguage(voices, synthesisLang);
-    utterance.lang = synthesisLang;
-    if (voice) {
-      utterance.voice = voice;
-    } else if (primarySpeechLanguage(synthesisLang) !== 'en') {
-      console.warn('[TTS] No installed voice for language; using browser default', {
-        lang: synthesisLang,
-        available: voices.map((v) => `${v.name} (${v.lang})`).slice(0, 8),
-      });
-    }
-    applyInterviewerSpeechSettings(utterance);
-
-    utterance.onstart = () => {
-      if (generation !== speakGeneration) return;
-      options?.onStart?.();
-    };
-    utterance.onend = done;
-    utterance.onerror = done;
-    window.speechSynthesis.speak(utterance);
-  });
+  if (generation !== speakGeneration) return;
+  await speakViaBrowser(trimmed, synthesisLang, generation, options);
 }
+
+export { subscribeInterviewerSpeaking, setInterviewerSpeaking } from '@/lib/serverTts';

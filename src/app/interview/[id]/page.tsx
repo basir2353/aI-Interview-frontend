@@ -12,7 +12,7 @@ import { CodeEditor } from '@/components/CodeEditor';
 import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
-import { waitForSpeechVoices, hasVoiceForLanguage } from '@/lib/voicePreferences';
+import { waitForSpeechVoices } from '@/lib/voicePreferences';
 import { speakInterviewerText } from '@/lib/interviewerSpeech';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
@@ -276,23 +276,6 @@ export default function LiveInterviewPage() {
     const normalized = normalizeInterviewLanguage(state.interviewLanguage);
     setInterviewLang(normalized);
   }, [state?.interviewLanguage]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !voiceEnabled) return;
-    if (normalizeInterviewLanguage(interviewLang) === 'en-US') return;
-    let cancelled = false;
-    void (async () => {
-      const voices = await waitForSpeechVoices(2800);
-      if (cancelled || hasVoiceForLanguage(voices, ttsLang)) return;
-      toast(
-        `${interviewLanguageLabel(normalizeInterviewLanguage(interviewLang))} voice not found on this device. Install the language pack in Windows Settings → Time & language → Speech, or use Microsoft Edge for better Arabic/Urdu voices.`,
-        { duration: 8000, icon: '🔊' }
-      );
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [interviewLang, ttsLang, voiceEnabled]);
 
   useEffect(() => {
     const onboarding = roomPhase === 'device-check' || roomPhase === 'instructions' || roomPhase === 'live';
@@ -684,7 +667,7 @@ export default function LiveInterviewPage() {
 
       try {
         setIntroSpeaking(true);
-        await waitForSpeechVoices(ttsLang.startsWith('en') ? 1200 : 2800);
+        await waitForSpeechVoices(800);
         for (let i = 0; i < segments.length; i++) {
           if (cancelled) return;
           const isIntroBeat = i < introSegmentCount;
