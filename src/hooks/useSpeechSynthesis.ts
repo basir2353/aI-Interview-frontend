@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { pickPreferredInterviewerVoice, waitForSpeechVoices } from '@/lib/voicePreferences';
+import { pickInterviewerVoiceForLanguage, waitForSpeechVoices } from '@/lib/voicePreferences';
 
 interface UseSpeechSynthesisOptions {
     onStart?: () => void;
     onEnd?: () => void;
     onError?: (error: string) => void;
+    /** BCP-47 tag — picks a voice matching this language instead of English only. */
+    lang?: string;
 }
 
 interface UseSpeechSynthesisReturn {
@@ -27,6 +29,7 @@ export function useSpeechSynthesis({
     onStart,
     onEnd,
     onError,
+    lang,
 }: UseSpeechSynthesisOptions = {}): UseSpeechSynthesisReturn {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -44,7 +47,7 @@ export function useSpeechSynthesis({
             const availableVoices = window.speechSynthesis.getVoices();
             setVoices(availableVoices);
 
-            const defaultVoice = pickPreferredInterviewerVoice(availableVoices);
+            const defaultVoice = pickInterviewerVoiceForLanguage(availableVoices, lang ?? 'en-US');
 
             if (defaultVoice) {
                 setSelectedVoice(defaultVoice);
@@ -61,7 +64,7 @@ export function useSpeechSynthesis({
         return () => {
             window.speechSynthesis.cancel();
         };
-    }, []);
+    }, [lang]);
 
     /**
      * Speak text using Web Speech API
@@ -77,10 +80,11 @@ export function useSpeechSynthesis({
                 utteranceRef.current = utterance;
 
                 const fallbackVoices = selectedVoice ? [] : await waitForSpeechVoices();
-                const voiceToUse = selectedVoice ?? pickPreferredInterviewerVoice(fallbackVoices);
+                const voiceToUse =
+                    selectedVoice ?? pickInterviewerVoiceForLanguage(fallbackVoices, lang ?? 'en-US');
                 if (voiceToUse) {
                     utterance.voice = voiceToUse;
-                    utterance.lang = voiceToUse.lang || 'en-US';
+                    utterance.lang = lang ?? voiceToUse.lang ?? 'en-US';
                 }
 
                 utterance.rate = rate;
@@ -108,7 +112,7 @@ export function useSpeechSynthesis({
 
             void run();
         },
-        [selectedVoice, rate, pitch, onStart, onEnd, onError]
+        [selectedVoice, rate, pitch, onStart, onEnd, onError, lang]
     );
 
     /**

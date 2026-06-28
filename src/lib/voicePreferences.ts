@@ -1,4 +1,5 @@
 export const INTERVIEWER_VOICE_STORAGE_KEY = 'interviewerVoicePreference';
+const INTERVIEWER_VOICE_BY_LANG_KEY = 'interviewerVoiceByLanguage';
 
 /** Browser default pace — rate 1.0, no extra pauses. */
 export const INTERVIEWER_SPEECH_PROFILE = {
@@ -49,10 +50,13 @@ interface SavedVoicePreference {
 }
 
 export function readSavedVoicePreference(): SavedVoicePreference | null {
+  return readSavedVoicePreferenceForLanguage('en-US');
+}
+
+function readLegacyVoicePreference(): SavedVoicePreference | null {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(INTERVIEWER_VOICE_STORAGE_KEY);
   if (!raw) return null;
-
   try {
     const parsed = JSON.parse(raw) as SavedVoicePreference;
     if (!parsed?.name) return null;
@@ -62,16 +66,85 @@ export function readSavedVoicePreference(): SavedVoicePreference | null {
   }
 }
 
+/** Saved recruiter/candidate voice choice for a specific interview language. */
+export function readSavedVoicePreferenceForLanguage(lang?: string): SavedVoicePreference | null {
+  if (typeof window === 'undefined') return null;
+  const primary = primarySpeechLanguage(lang);
+
+  if (primary === 'en') {
+    const legacy = readLegacyVoicePreference();
+    if (legacy) return legacy;
+  }
+
+  const raw = window.localStorage.getItem(INTERVIEWER_VOICE_BY_LANG_KEY);
+  if (!raw) return null;
+  try {
+    const map = JSON.parse(raw) as Record<string, SavedVoicePreference>;
+    const pref = map[primary];
+    if (!pref?.name) return null;
+    return pref;
+  } catch {
+    return null;
+  }
+}
+
 export function writeSavedVoicePreference(voice: SpeechSynthesisVoice | null): void {
+  writeSavedVoicePreferenceForLanguage(voice, voice?.lang ?? 'en-US');
+}
+
+export function writeSavedVoicePreferenceForLanguage(
+  voice: SpeechSynthesisVoice | null,
+  lang?: string
+): void {
   if (typeof window === 'undefined') return;
+  const primary = primarySpeechLanguage(lang ?? voice?.lang);
+
+  const raw = window.localStorage.getItem(INTERVIEWER_VOICE_BY_LANG_KEY);
+  let map: Record<string, SavedVoicePreference> = {};
+  if (raw) {
+    try {
+      map = JSON.parse(raw) as Record<string, SavedVoicePreference>;
+    } catch {
+      map = {};
+    }
+  }
+
   if (!voice) {
-    window.localStorage.removeItem(INTERVIEWER_VOICE_STORAGE_KEY);
+    delete map[primary];
+    window.localStorage.setItem(INTERVIEWER_VOICE_BY_LANG_KEY, JSON.stringify(map));
+    if (primary === 'en') window.localStorage.removeItem(INTERVIEWER_VOICE_STORAGE_KEY);
     return;
   }
-  window.localStorage.setItem(
-    INTERVIEWER_VOICE_STORAGE_KEY,
-    JSON.stringify({ name: voice.name, lang: voice.lang })
-  );
+
+  const pref = { name: voice.name, lang: voice.lang };
+  map[primary] = pref;
+  window.localStorage.setItem(INTERVIEWER_VOICE_BY_LANG_KEY, JSON.stringify(map));
+  if (primary === 'en') {
+    window.localStorage.setItem(INTERVIEWER_VOICE_STORAGE_KEY, JSON.stringify(pref));
+  }
+}
+
+export function voiceKeyFor(voice: SpeechSynthesisVoice): string {
+  return `${voice.name}||${voice.lang}`;
+}
+
+export function voiceFromKey(
+  voices: SpeechSynthesisVoice[],
+  key: string
+): SpeechSynthesisVoice | null {
+  const [name, lang] = key.split('||');
+  return voices.find((v) => v.name === name && v.lang === lang) ?? null;
+}
+
+/** Voices installed on this device that match the interview language. */
+export function filterVoicesForLanguage(
+  voices: SpeechSynthesisVoice[],
+  lang?: string
+): SpeechSynthesisVoice[] {
+  if (!voices.length) return [];
+  const primary = primarySpeechLanguage(lang);
+  const matching = voices.filter((v) => voiceMatchesPrimaryLang(v.lang, primary));
+  return matching;
 }
 
 export function pickPreferredInterviewerVoice(
@@ -132,6 +205,14 @@ export function pickInterviewerVoiceForLanguage(
 
   if (primary === 'en') {
     return pickEnglishInterviewerVoice(voices, englishHints);
+  }
+
+  const saved = readSavedVoicePreferenceForLanguage(lang);
+  if (saved) {
+    const exactSaved = matching.find(
+      (v) => v.name === saved.name && (!saved.lang || v.lang === saved.lang)
+    );
+    if (exactSaved) return exactSaved;
   }
 
   if (!matching.length) return null;

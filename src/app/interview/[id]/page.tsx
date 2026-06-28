@@ -684,7 +684,7 @@ export default function LiveInterviewPage() {
 
       try {
         setIntroSpeaking(true);
-        await waitForSpeechVoices();
+        await waitForSpeechVoices(ttsLang.startsWith('en') ? 1200 : 2800);
         for (let i = 0; i < segments.length; i++) {
           if (cancelled) return;
           const isIntroBeat = i < introSegmentCount;

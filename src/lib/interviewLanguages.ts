@@ -35,7 +35,19 @@ export function interviewLanguageLabel(code: InterviewLanguageCode): string {
   return INTERVIEW_LANGUAGE_OPTIONS.find((o) => o.value === code)?.label ?? 'English';
 }
 
-/** BCP-47 tag for browser speech synthesis. */
+/** Sample phrase for voice preview in each interview language. */
+export function voicePreviewPhrase(code: InterviewLanguageCode): string {
+  const phrases: Record<InterviewLanguageCode, string> = {
+    'en-US': 'Hello, I am your interviewer. Let us begin with the first question.',
+    es: 'Hola, soy su entrevistador. Comencemos con la primera pregunta.',
+    fr: 'Bonjour, je suis votre intervieweur. Commençons par la première question.',
+    de: 'Hallo, ich bin Ihr Interviewer. Beginnen wir mit der ersten Frage.',
+    hi: 'नमस्ते, मैं आपका साक्षात्कारकर्ता हूँ। आइए पहले प्रश्न से शुरू करें।',
+    ar: 'مرحباً، أنا محاورك. لنبدأ بالسؤال الأول.',
+    ur: 'سلام، میں آپ کا انٹرویو لینے والا ہوں۔ آئیے پہلا سوال شروع کرتے ہیں۔',
+  };
+  return phrases[code];
+}
 export function speechSynthesisLang(code: InterviewLanguageCode): string {
   if (code === 'en-US') return 'en-US';
   if (code === 'ur') return 'ur-PK';

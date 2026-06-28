@@ -11,6 +11,7 @@ import {
   interviewLanguageLabel,
   normalizeInterviewLanguage,
 } from '@/lib/interviewLanguages';
+import { LanguageVoicePicker } from '@/components/recruiter/LanguageVoicePicker';
 import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
@@ -18,11 +19,6 @@ import { DashboardLoading } from '@/components/dashboard/DashboardLoading';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { StatusBadge, statusToVariant } from '@/components/dashboard/StatusBadge';
 import { Bot, Calendar, CheckCircle2, ClipboardList, Users } from 'lucide-react';
-import {
-  pickPreferredInterviewerVoice,
-  readSavedVoicePreference,
-  writeSavedVoicePreference,
-} from '@/lib/voicePreferences';
 
 const ROLES: { value: InterviewRole; label: string }[] = [
   { value: 'technical', label: 'Technical' },
@@ -110,9 +106,6 @@ export default function RecruiterDashboardPage() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState('');
   const [showCodingSection, setShowCodingSection] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoiceKey, setSelectedVoiceKey] = useState('');
-  const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
   const [recruiterCompanyName, setRecruiterCompanyName] = useState<string | null>(null);
   const [defaultInterviewerPersona, setDefaultInterviewerPersona] = useState<InterviewerPersona>('ethan');
   const [defaultInterviewLanguage, setDefaultInterviewLanguage] =
@@ -167,31 +160,6 @@ export default function RecruiterDashboardPage() {
       setCreateInterviewLanguage(defaultInterviewLanguage);
     }
   }, [createOpen, defaultInterviewerPersona, defaultInterviewLanguage]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-
-    const keyForVoice = (voice: SpeechSynthesisVoice) => `${voice.name}||${voice.lang}`;
-    const loadVoices = () => {
-      const available = window.speechSynthesis.getVoices();
-      if (!available.length) return;
-      setVoices(available);
-
-      const saved = readSavedVoicePreference();
-      const savedVoice = saved
-        ? available.find((v) => v.name === saved.name && (!saved.lang || v.lang === saved.lang))
-        : null;
-      const fallback = pickPreferredInterviewerVoice(available);
-      const selected = savedVoice || fallback;
-      if (selected) setSelectedVoiceKey(keyForVoice(selected));
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    return () => {
-      window.speechSynthesis.cancel();
-    };
-  }, []);
 
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -303,34 +271,6 @@ export default function RecruiterDashboardPage() {
     } finally {
       setActionLoading(null);
     }
-  };
-
-  const handleVoiceChange = (value: string) => {
-    setSelectedVoiceKey(value);
-    const [name, lang] = value.split('||');
-    const selected = voices.find((v) => v.name === name && v.lang === lang);
-    writeSavedVoicePreference(selected ?? null);
-  };
-
-  const handleVoicePreview = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const [name, lang] = selectedVoiceKey.split('||');
-    const selected = voices.find((v) => v.name === name && v.lang === lang);
-    if (!selected) return;
-
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(
-      'Hello, I am your interviewer. Let us begin with the first question.'
-    );
-    utterance.voice = selected;
-    utterance.lang = selected.lang || 'en-US';
-    utterance.rate = 0.96;
-    utterance.pitch = 1.03;
-    utterance.volume = 1;
-    utterance.onstart = () => setIsPreviewingVoice(true);
-    utterance.onend = () => setIsPreviewingVoice(false);
-    utterance.onerror = () => setIsPreviewingVoice(false);
-    window.speechSynthesis.speak(utterance);
   };
 
   const statusMeta = useMemo(() => {
@@ -592,39 +532,7 @@ export default function RecruiterDashboardPage() {
                       </Link>
                     </p>
                   </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-[var(--surface-light-fg)]">Interviewer voice</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={selectedVoiceKey}
-                        onChange={(e) => handleVoiceChange(e.target.value)}
-                        disabled={voices.length === 0}
-                        className={`${inputBase} disabled:bg-[var(--accent-muted)]`}
-                      >
-                        {voices.length === 0 ? (
-                          <option value="">Loading voices…</option>
-                        ) : (
-                          voices.map((voice) => {
-                            const key = `${voice.name}||${voice.lang}`;
-                            return (
-                              <option key={key} value={key}>
-                                {voice.name} ({voice.lang})
-                              </option>
-                            );
-                          })
-                        )}
-                      </select>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="md"
-                        onClick={handleVoicePreview}
-                        disabled={!selectedVoiceKey || isPreviewingVoice}
-                      >
-                        {isPreviewingVoice ? 'Playing…' : 'Preview'}
-                      </Button>
-                    </div>
-                  </div>
+                  <LanguageVoicePicker interviewLanguage={createInterviewLanguage} inputClassName={inputBase} />
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">
