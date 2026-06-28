@@ -1,4 +1,5 @@
 import type { InterviewLanguageCode } from '@/lib/interviewLanguages';
+import type { InterviewerPersona } from '@/types';
 import { normalizeInterviewLanguage } from '@/lib/interviewLanguages';
 import { CLOUD_TTS_PLAYBACK_RATE } from '@/lib/ttsConfig';
 
@@ -50,13 +51,19 @@ export function subscribeInterviewerSpeaking(onChange: (speaking: boolean) => vo
 /** Fetch MP3 from backend Edge TTS (Urdu, Arabic, all supported languages). */
 export async function fetchServerTtsAudio(
   text: string,
-  language: InterviewLanguageCode | string
+  language: InterviewLanguageCode | string,
+  persona?: InterviewerPersona | string
 ): Promise<ArrayBuffer> {
   const lang = normalizeInterviewLanguage(language);
+  const body: Record<string, string> = {
+    text: text.trim().slice(0, 4000),
+    language: lang,
+  };
+  if (persona) body.persona = persona === 'zara' ? 'zara' : 'ethan';
   const res = await fetch('/api/proxy/ai/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text.trim().slice(0, 4000), language: lang }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -123,8 +130,8 @@ export async function playServerTtsAudio(
 export async function speakViaServerTts(
   text: string,
   language: InterviewLanguageCode | string,
-  options?: { onStart?: () => void; onEnd?: () => void }
+  options?: { onStart?: () => void; onEnd?: () => void; persona?: InterviewerPersona | string }
 ): Promise<void> {
-  const buffer = await fetchServerTtsAudio(text, language);
+  const buffer = await fetchServerTtsAudio(text, language, options?.persona);
   await playServerTtsAudio(buffer, options);
 }

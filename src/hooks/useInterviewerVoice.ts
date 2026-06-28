@@ -11,6 +11,7 @@ interface UseInterviewerVoiceOptions {
   /** Turn IDs to skip (e.g. intro + first question spoken manually on live entry). */
   skipTurnIds?: Set<string> | null;
   lang?: string;
+  persona?: 'ethan' | 'zara' | string;
 }
 
 /**
@@ -28,6 +29,7 @@ export function useInterviewerVoice(
   const onSpeakTextRef = useRef(options?.onSpeakText);
   const skipTurnIds = options?.skipTurnIds;
   const lang = options?.lang;
+  const persona = options?.persona;
 
   useEffect(() => {
     onAutoSpeakStartRef.current = options?.onAutoSpeakStart;
@@ -46,9 +48,9 @@ export function useInterviewerVoice(
   const speakText = useCallback(
     (text: string, language?: string) => {
       if (!text?.trim()) return;
-      void speakInterviewerText(text, { lang: language || lang });
+      void speakInterviewerText(text, { lang: language || lang, persona });
     },
-    [lang]
+    [lang, persona]
   );
 
   /** Speak a specific AI turn and invoke pipeline callbacks. */
@@ -57,6 +59,7 @@ export function useInterviewerVoice(
       if (!text.trim()) return;
       await speakInterviewerText(text, {
         lang,
+        persona,
         onStart: () => {
           lastSpokenTurnId.current = turnId;
           onSpeakTextRef.current?.(text, turnId);
@@ -65,7 +68,7 @@ export function useInterviewerVoice(
         onEnd: () => onAutoSpeakEndRef.current?.(),
       });
     },
-    [lang]
+    [lang, persona]
   );
 
   useEffect(() => {

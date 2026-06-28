@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { api } from '@/lib/api';
-import type { InterviewState, InterviewReport } from '@/types';
+import type { InterviewState, InterviewReport, InterviewerPersona } from '@/types';
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/AudioRecorder';
 import { VideoPreview } from '@/components/VideoPreview';
 import { CodeEditor } from '@/components/CodeEditor';
@@ -31,6 +31,7 @@ import {
   interviewLanguageLabel,
   normalizeInterviewLanguage,
   speechSynthesisLang,
+  sttLanguageForInterview,
 } from '@/lib/interviewLanguages';
 import {
   InterviewStatusBar,
@@ -75,6 +76,8 @@ export default function LiveInterviewPage() {
     () => speechSynthesisLang(normalizeInterviewLanguage(interviewLang)),
     [interviewLang]
   );
+  const interviewerPersona: InterviewerPersona =
+    state?.interviewerPersona === 'zara' ? 'zara' : 'ethan';
   const [voicePhase, setVoicePhase] = useState<VoicePipelinePhase>('idle');
   /** On-screen question text — synced when AI speaks or state updates. */
   const [displayQuestion, setDisplayQuestion] = useState('');
@@ -233,6 +236,7 @@ export default function LiveInterviewPage() {
     },
     skipTurnIds,
     lang: interviewLang,
+    persona: interviewerPersona,
   });
 
   /** Stable refs for intro pipeline — state updates must not cancel in-flight intro TTS. */
@@ -639,6 +643,7 @@ export default function LiveInterviewPage() {
     const speakSegment = async (text: string, isIntroBeat: boolean) => {
       await speakInterviewerText(text, {
         lang: interviewLang,
+        persona: interviewerPersona,
         onStart: () => {
           clearAutoListenTimeoutRef.current();
           autoListeningRef.current = false;
@@ -748,7 +753,7 @@ export default function LiveInterviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomPhase, liveScreenReady, report, id, interviewLang]);
+  }, [roomPhase, liveScreenReady, report, id, interviewLang, interviewerPersona]);
 
   useEffect(() => {
     return () => {
@@ -909,7 +914,6 @@ export default function LiveInterviewPage() {
   const showCodeTab = Boolean(isTechnical || codingTurnActive || contentSuggestsTechnical || codePanelRequested);
   const showNotepadTab = Boolean(!showCodeTab);
   /** Recruiter default is Ethan; `zara` only when explicitly set on the schedule. */
-  const interviewerPersona = state.interviewerPersona === 'zara' ? 'zara' : 'ethan';
   const interviewerFirstName = interviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan';
   const interviewerInitial = interviewerPersona === 'zara' ? 'Z' : 'E';
   const interviewerSubtitle = state.companyName?.trim() || 'Intervion AI';
@@ -939,7 +943,7 @@ export default function LiveInterviewPage() {
   const voiceRecorderNode = (
     <AudioRecorder
       ref={audioRecorderRef}
-      transcribeLanguage={interviewLang}
+      transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
       onTranscript={handleVoiceTranscript}
       silenceMs={2200}
       minRecordMs={600}

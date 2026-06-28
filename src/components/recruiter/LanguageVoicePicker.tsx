@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import type { InterviewerPersona } from '@/types';
 import {
   type InterviewLanguageCode,
   cloudTtsVoiceLabel,
@@ -12,25 +13,34 @@ import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpee
 
 interface LanguageVoicePickerProps {
   interviewLanguage: InterviewLanguageCode;
+  interviewerPersona?: InterviewerPersona;
   inputClassName?: string;
 }
 
-/** Cloud voice preview — same Edge neural TTS used in live interviews (all browsers). */
-export function LanguageVoicePicker({ interviewLanguage, inputClassName }: LanguageVoicePickerProps) {
+/** Cloud voice preview — matches Ethan (male) or ZaraAlex (female) in live interviews. */
+export function LanguageVoicePicker({
+  interviewLanguage,
+  interviewerPersona = 'ethan',
+  inputClassName,
+}: LanguageVoicePickerProps) {
   const [isPreviewingVoice, setIsPreviewingVoice] = useState(false);
-  const voiceLabel = cloudTtsVoiceLabel(interviewLanguage);
+  const voiceLabel = cloudTtsVoiceLabel(interviewLanguage, interviewerPersona);
   const langLabel = interviewLanguageLabel(interviewLanguage);
+  const personaLabel = interviewerPersona === 'zara' ? 'ZaraAlex (female)' : 'Ethan (male)';
 
   const handleVoicePreview = useCallback(async () => {
     primeInterviewAudio();
     setIsPreviewingVoice(true);
     try {
       const phrase = voicePreviewPhrase(interviewLanguage);
-      await speakInterviewerText(phrase, { lang: interviewLanguage });
+      await speakInterviewerText(phrase, {
+        lang: interviewLanguage,
+        persona: interviewerPersona,
+      });
     } finally {
       setIsPreviewingVoice(false);
     }
-  }, [interviewLanguage]);
+  }, [interviewLanguage, interviewerPersona]);
 
   const boxClass =
     inputClassName ??
@@ -54,8 +64,7 @@ export function LanguageVoicePicker({ interviewLanguage, inputClassName }: Langu
         </Button>
       </div>
       <p className="mt-1.5 text-xs font-medium text-[var(--surface-light-muted)]">
-        Cloud voice for {langLabel} — works in Chrome, Firefox, Safari, and Edge without installing language packs.
-        Updates when you change interview language.
+        {personaLabel} · {langLabel} — updates when you change language or AI interviewer.
       </p>
     </div>
   );

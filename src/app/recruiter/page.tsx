@@ -532,7 +532,11 @@ export default function RecruiterDashboardPage() {
                       </Link>
                     </p>
                   </div>
-                  <LanguageVoicePicker interviewLanguage={createInterviewLanguage} inputClassName={inputBase} />
+                  <LanguageVoicePicker
+                    interviewLanguage={createInterviewLanguage}
+                    interviewerPersona={createInterviewerPersona}
+                    inputClassName={inputBase}
+                  />
                 </div>
 
                 <div className="grid gap-5 sm:grid-cols-2">

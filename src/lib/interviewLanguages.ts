@@ -56,17 +56,39 @@ export function speechSynthesisLang(code: InterviewLanguageCode): string {
   return code;
 }
 
-/** Cloud TTS voice labels (Microsoft Edge neural — works in every browser). */
-export const CLOUD_TTS_VOICE_LABEL: Record<InterviewLanguageCode, string> = {
-  'en-US': 'Jenny (English)',
-  es: 'Elvira (Español)',
-  fr: 'Denise (Français)',
-  de: 'Katja (Deutsch)',
-  hi: 'Swara (हिन्दी)',
-  ar: 'Zariyah (العربية)',
-  ur: 'Uzma (اردو)',
+/** Cloud TTS voice labels — female (ZaraAlex) vs male (Ethan). */
+const CLOUD_TTS_FEMALE_LABEL: Record<InterviewLanguageCode, string> = {
+  'en-US': 'Jenny (English, female)',
+  es: 'Elvira (Español, female)',
+  fr: 'Denise (Français, female)',
+  de: 'Katja (Deutsch, female)',
+  hi: 'Swara (हिन्दी, female)',
+  ar: 'Zariyah (العربية, female)',
+  ur: 'Uzma (اردو, female)',
 };
 
-export function cloudTtsVoiceLabel(code: InterviewLanguageCode): string {
-  return CLOUD_TTS_VOICE_LABEL[code] ?? CLOUD_TTS_VOICE_LABEL['en-US'];
+const CLOUD_TTS_MALE_LABEL: Record<InterviewLanguageCode, string> = {
+  'en-US': 'Guy (English, male)',
+  es: 'Alvaro (Español, male)',
+  fr: 'Henri (Français, male)',
+  de: 'Conrad (Deutsch, male)',
+  hi: 'Madhur (हिन्दी, male)',
+  ar: 'Hamed (العربية, male)',
+  ur: 'Asad (اردو, male)',
+};
+
+/** @deprecated use cloudTtsVoiceLabel(code, persona) */
+export const CLOUD_TTS_VOICE_LABEL: Record<InterviewLanguageCode, string> = CLOUD_TTS_FEMALE_LABEL;
+
+export function cloudTtsVoiceLabel(
+  code: InterviewLanguageCode,
+  persona: 'ethan' | 'zara' = 'ethan'
+): string {
+  const labels = persona === 'zara' ? CLOUD_TTS_FEMALE_LABEL : CLOUD_TTS_MALE_LABEL;
+  return labels[code] ?? labels['en-US'];
+}
+
+/** STT language — auto-detect handles Arabic+English, Urdu+English, etc. */
+export function sttLanguageForInterview(_code?: InterviewLanguageCode): string {
+  return 'auto';
 }

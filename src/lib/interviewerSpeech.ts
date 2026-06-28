@@ -6,6 +6,7 @@ import {
   waitForSpeechVoices,
 } from '@/lib/voicePreferences';
 import { normalizeInterviewLanguage, speechSynthesisLang } from '@/lib/interviewLanguages';
+import type { InterviewerPersona } from '@/types';
 import {
   speakViaServerTts,
   stopServerTtsPlayback,
@@ -106,6 +107,7 @@ export async function speakInterviewerText(
   text: string,
   options?: {
     lang?: string;
+    persona?: InterviewerPersona | string;
     onStart?: () => void;
     onEnd?: () => void;
   }
@@ -127,6 +129,7 @@ export async function speakInterviewerText(
   try {
     await Promise.race([
       speakViaServerTts(trimmed, interviewLang, {
+        persona: options?.persona,
         onStart: () => {
           if (generation !== speakGeneration) return;
           options?.onStart?.();
