@@ -1,9 +1,9 @@
 export const INTERVIEWER_VOICE_STORAGE_KEY = 'interviewerVoicePreference';
 const INTERVIEWER_VOICE_BY_LANG_KEY = 'interviewerVoiceByLanguage';
 
-/** Browser default pace — rate 1.0, no extra pauses. */
+/** Browser default pace — slightly faster for interview flow. */
 export const INTERVIEWER_SPEECH_PROFILE = {
-  rate: 1.0,
+  rate: 1.18,
   pitch: 1.0,
   volume: 1.0,
 } as const;
@@ -15,11 +15,11 @@ export function estimateInterviewerSpeechDurationMs(text: string): number {
   const words = trimmed.split(/\s+/).filter(Boolean).length;
   const chars = trimmed.length;
   const hasRtl = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u4E00-\u9FFF]/.test(trimmed);
-  const msPerWord = 450 / rate;
-  const fromWords = words * msPerWord + 1000;
-  const fromChars = hasRtl ? (chars / 11) * (1000 / rate) + 800 : 0;
+  const msPerWord = 380 / rate;
+  const fromWords = words * msPerWord + 600;
+  const fromChars = hasRtl ? (chars / 14) * (1000 / rate) + 500 : 0;
   const estimated = hasRtl ? Math.max(fromWords, fromChars) : fromWords;
-  return Math.max(3500, Math.min(120000, estimated));
+  return Math.max(2500, Math.min(90000, estimated));
 }
 
 export function applyInterviewerSpeechSettings(utterance: SpeechSynthesisUtterance): void {

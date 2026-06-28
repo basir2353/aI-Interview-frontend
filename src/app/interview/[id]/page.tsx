@@ -12,8 +12,12 @@ import { CodeEditor } from '@/components/CodeEditor';
 import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
-import { waitForSpeechVoices } from '@/lib/voicePreferences';
 import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
+import {
+  TTS_AFTER_SPEAK_MIC_DELAY_MS,
+  TTS_INTRO_TO_QUESTION_PAUSE_MS,
+  TTS_LIVE_ROOM_READY_MS,
+} from '@/lib/ttsConfig';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
@@ -225,7 +229,7 @@ export default function LiveInterviewPage() {
       setTimeout(() => {
         if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current) return;
         startAutoListeningWindow();
-      }, 200);
+      }, TTS_AFTER_SPEAK_MIC_DELAY_MS);
     },
     skipTurnIds,
     lang: interviewLang,
@@ -594,7 +598,7 @@ export default function LiveInterviewPage() {
         if (cancelled) return;
         timer = setTimeout(() => {
           if (!cancelled) setLiveScreenReady(true);
-        }, 400);
+        }, TTS_LIVE_ROOM_READY_MS);
       });
     });
     return () => {
@@ -668,19 +672,32 @@ export default function LiveInterviewPage() {
 
       try {
         setIntroSpeaking(true);
-        await waitForSpeechVoices(800);
-        for (let i = 0; i < segments.length; i++) {
+        const introTexts = segments.slice(0, introSegmentCount).filter(Boolean);
+        const questionTexts = segments.slice(introSegmentCount).filter(Boolean);
+
+        if (introTexts.length > 0) {
           if (cancelled) return;
-          const isIntroBeat = i < introSegmentCount;
-          setLiveCaption(segments[i]);
-          setIntroSpeaking(isIntroBeat);
-          await speakSegment(segments[i], isIntroBeat);
-          await pause(isIntroBeat ? 350 : 180);
+          const combinedIntro = introTexts.join(' ');
+          setLiveCaption(combinedIntro);
+          setIntroSpeaking(true);
+          await speakSegment(combinedIntro, true);
+          if (questionTexts.length > 0) {
+            await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
+          }
         }
-        if (questionTurn?.content?.trim()) {
+
+        if (questionTexts.length > 0) {
+          if (cancelled) return;
+          const combinedQuestion = questionTexts.join(' ');
+          setLiveCaption(combinedQuestion);
+          setIntroSpeaking(false);
+          setDisplayQuestion(combinedQuestion);
+          await speakSegment(combinedQuestion, false);
+        } else if (questionTurn?.content?.trim()) {
           setDisplayQuestion(questionTurn.content.trim());
         }
-        await pause(150);
+
+        await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
         finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
       } catch (e) {
         console.error('[Intro] Speech pipeline error', e);

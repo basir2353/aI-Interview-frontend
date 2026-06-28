@@ -1,5 +1,6 @@
 import type { InterviewLanguageCode } from '@/lib/interviewLanguages';
 import { normalizeInterviewLanguage } from '@/lib/interviewLanguages';
+import { CLOUD_TTS_PLAYBACK_RATE } from '@/lib/ttsConfig';
 
 const TTS_SPEAKING_EVENT = 'intervion-tts-speaking';
 
@@ -90,6 +91,7 @@ export async function playServerTtsAudio(
   activeObjectUrl = url;
   const audio = new Audio(url);
   audio.preload = 'auto';
+  audio.playbackRate = CLOUD_TTS_PLAYBACK_RATE;
   activeAudio = audio;
 
   return new Promise<void>((resolve, reject) => {

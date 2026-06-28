@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Turn } from '@/types';
 import { cancelInterviewerSpeech, speakInterviewerText } from '@/lib/interviewerSpeech';
+import { TTS_TURN_START_DELAY_MS } from '@/lib/ttsConfig';
 
 interface UseInterviewerVoiceOptions {
   onAutoSpeakStart?: () => void;
@@ -88,7 +89,7 @@ export function useInterviewerVoice(
     const timer = setTimeout(() => {
       if (cancelled) return;
       void speakTurn(fullText, lastAiTurn.id);
-    }, 180);
+    }, TTS_TURN_START_DELAY_MS);
 
     return () => {
       cancelled = true;
