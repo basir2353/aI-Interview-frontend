@@ -29,6 +29,8 @@ interface AudioRecorderProps {
   minRecordMs?: number;
   minSpeechMs?: number;
   minTranscribeMs?: number;
+  minSpeechMsForTranscribe?: number;
+  disableAdaptiveVad?: boolean;
   maxRecordMs?: number;
   stopDelayMs?: number;
   /** ISO 639-1 language for STT (ur, ar, en). */
@@ -55,6 +57,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     minRecordMs: minRecordMsProp,
     minSpeechMs: minSpeechMsProp,
     minTranscribeMs: minTranscribeMsProp,
+    minSpeechMsForTranscribe: minSpeechMsForTranscribeProp,
+    disableAdaptiveVad: disableAdaptiveVadProp,
     maxRecordMs: maxRecordMsProp,
     stopDelayMs: stopDelayMsProp,
     transcribeLanguage,
@@ -80,6 +84,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     minRecordMs: minRecordMsProp ?? 600,
     minSpeechMs: minSpeechMsProp ?? 400,
     minTranscribeMs: minTranscribeMsProp ?? 1200,
+    minSpeechMsForTranscribe: minSpeechMsForTranscribeProp ?? 2000,
+    disableAdaptiveVad: disableAdaptiveVadProp ?? false,
     transcribeLanguage,
     transcribeMixed,
     onTranscript: (text) => {

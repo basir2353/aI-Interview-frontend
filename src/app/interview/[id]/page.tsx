@@ -119,6 +119,9 @@ export default function LiveInterviewPage() {
   /** Do not open mic until this timestamp (prevents TTS speaker echo auto-submit). */
   const micEligibleAfterRef = useRef(0);
   const autoListenScheduleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** When true, mic only opens on user click — prevents phantom auto-submits. */
+  const manualMicOnlyRef = useRef(true);
+  const [micPrompt, setMicPrompt] = useState('');
 
   useEffect(() => {
     voicePhaseRef.current = voicePhase;
@@ -217,8 +220,18 @@ export default function LiveInterviewPage() {
     }, listenWindowMs);
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
 
-  /** Wait for TTS echo to settle, then open the mic once. */
+  const notifyReadyForAnswer = useCallback(() => {
+    setMicPrompt('Click the mic button when you are ready to answer. Speak for a few seconds, then click again to finish.');
+    setVoicePhase('idle');
+    voicePhaseRef.current = 'idle';
+  }, []);
+
+  /** Wait for TTS echo to settle — only used when manual mic is off (legacy). */
   const scheduleAutoListen = useCallback(() => {
+    if (manualMicOnlyRef.current) {
+      notifyReadyForAnswer();
+      return;
+    }
     if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
     markMicEligibleAfterTts();
     clearAutoListenTimeout();
@@ -229,7 +242,7 @@ export default function LiveInterviewPage() {
       if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
       startAutoListeningWindow();
     }, waitMs);
-  }, [clearAutoListenTimeout, markMicEligibleAfterTts, startAutoListeningWindow]);
+  }, [clearAutoListenTimeout, markMicEligibleAfterTts, startAutoListeningWindow, notifyReadyForAnswer]);
 
   const handleMicCaptureRejected = useCallback(
     (message: string) => {
@@ -237,19 +250,12 @@ export default function LiveInterviewPage() {
       clearAutoListenTimeout();
       setMicOn(false);
       setVoicePhase('idle');
+      voicePhaseRef.current = 'idle';
       noSpeechRetryRef.current += 1;
-      if (noSpeechRetryRef.current >= 2) {
-        autoListeningRef.current = false;
-        setError(`${message} Click the mic button when you are ready to answer.`);
-        return;
-      }
+      setMicPrompt(`${message} Click the mic button when you are ready to answer.`);
       setError(message);
-      window.setTimeout(() => {
-        if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
-        scheduleAutoListen();
-      }, 2000);
     },
-    [clearAutoListenTimeout, scheduleAutoListen]
+    [clearAutoListenTimeout]
   );
 
   useEffect(() => {
@@ -333,16 +339,16 @@ export default function LiveInterviewPage() {
   });
 
   /** Stable refs for intro pipeline — state updates must not cancel in-flight intro TTS. */
-  const scheduleAutoListenRef = useRef(scheduleAutoListen);
+  const notifyReadyForAnswerRef = useRef(notifyReadyForAnswer);
   const clearAutoListenTimeoutRef = useRef(clearAutoListenTimeout);
   const markTurnSpokenRef = useRef(markTurnSpoken);
   const syncDisplayQuestionFromStateRef = useRef(syncDisplayQuestionFromState);
   useEffect(() => {
-    scheduleAutoListenRef.current = scheduleAutoListen;
+    notifyReadyForAnswerRef.current = notifyReadyForAnswer;
     clearAutoListenTimeoutRef.current = clearAutoListenTimeout;
     markTurnSpokenRef.current = markTurnSpoken;
     syncDisplayQuestionFromStateRef.current = syncDisplayQuestionFromState;
-  }, [scheduleAutoListen, clearAutoListenTimeout, markTurnSpoken, syncDisplayQuestionFromState]);
+  }, [notifyReadyForAnswer, clearAutoListenTimeout, markTurnSpoken, syncDisplayQuestionFromState]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
@@ -352,11 +358,14 @@ export default function LiveInterviewPage() {
   const voiceStatusPhase: VoicePipelinePhase =
     loading ? 'thinking' : introSpeaking ? 'speaking' : voicePhase === 'listening' && !micOn ? 'idle' : voicePhase;
   const voiceStatusDetail =
-    loading && answerText
+    micPrompt ||
+    (loading && answerText
       ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
       : countdownRemaining > 0
         ? `Next question in ${countdownRemaining}s`
-        : undefined;
+        : voicePhase === 'idle' && !loading && !introSpeaking && introCompleteRef.current
+          ? 'Click the mic button when you are ready to answer.'
+          : undefined);
 
   const loadState = useCallback(async () => {
     if (!id) return;
@@ -539,12 +548,13 @@ export default function LiveInterviewPage() {
           .reverse()
           .find((t) => t.role === 'ai' && !t.isIntro)?.content ||
         '';
-      if (isLikelyInterviewerEcho(cleaned, lastAiText) || isInvalidCandidateTranscript(cleaned)) {
+      if (isLikelyInterviewerEcho(cleaned, lastAiText) || isInvalidCandidateTranscript(cleaned, interviewLang)) {
         console.warn('[Interview] Ignoring invalid or hallucinated transcript', { preview: cleaned.slice(0, 80) });
-        handleMicCaptureRejected('I did not hear a clear answer from you.');
+        handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
 
+      setMicPrompt('');
       setMicOn(false);
       setVoicePhase('transcribing');
       setAnswerText(cleaned);
@@ -563,7 +573,7 @@ export default function LiveInterviewPage() {
       // Submit immediately so the interview feels natural and efficient
       void submitAnswerText(cleaned);
     },
-    [clearAutoListenTimeout, submitAnswerText, displayQuestion, state?.turns, handleMicCaptureRejected]
+    [clearAutoListenTimeout, submitAnswerText, displayQuestion, state?.turns, handleMicCaptureRejected, interviewLang]
   );
 
   const handleSubmitAnswer = () => {
@@ -610,9 +620,9 @@ export default function LiveInterviewPage() {
 
   const handleMicToggle = () => {
     clearAutoListenTimeout();
+    autoListeningRef.current = false;
     const recorder = audioRecorderRef.current;
     if (recorder?.listening) {
-      autoListeningRef.current = false;
       recorder.stop();
       return;
     }
@@ -627,13 +637,19 @@ export default function LiveInterviewPage() {
       recorder?.cancel();
       setMicOn(false);
       setVoicePhase('idle');
+      setMicPrompt('Microphone muted. Click the mic button when you are ready to answer.');
       setError('');
+      return;
+    }
+    if (loading || pipelineBusyRef.current || interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
+      setError('Please wait for the interviewer to finish speaking.');
       return;
     }
     userMutedRef.current = false;
     noSpeechRetryRef.current = 0;
-    if (loading || pipelineBusyRef.current) return;
-    startAutoListeningWindow();
+    setMicPrompt('Listening… speak your answer, then click the mic again when finished.');
+    setError('');
+    void recorder?.start();
   };
 
   const handleCameraToggle = () => {
@@ -777,7 +793,7 @@ export default function LiveInterviewPage() {
       if (typeof window !== 'undefined' && id) {
         window.sessionStorage.setItem(`intervion_intro_spoken_${id}`, '1');
       }
-      scheduleAutoListenRef.current();
+      notifyReadyForAnswerRef.current();
     };
 
     const resumeLiveSession = (liveState: InterviewState) => {
@@ -1130,11 +1146,13 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={3500}
-      minRecordMs={1500}
-      minSpeechMs={1200}
-      minTranscribeMs={1800}
-      stopDelayMs={500}
+      silenceMs={4000}
+      minRecordMs={2000}
+      minSpeechMs={1500}
+      minTranscribeMs={2500}
+      minSpeechMsForTranscribe={2500}
+      disableAdaptiveVad
+      stopDelayMs={600}
       maxRecordMs={120000}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;

@@ -19,6 +19,10 @@ export interface UseVoiceRecorderOptions {
   minSpeechMs?: number;
   /** Minimum clip length before sending to STT (blocks brief noise clips). */
   minTranscribeMs?: number;
+  /** Minimum detected speech before sending to STT (blocks VAD false positives). */
+  minSpeechMsForTranscribe?: number;
+  /** Do not lower VAD sensitivity after long silence (interview rooms). */
+  disableAdaptiveVad?: boolean;
   /** Hard stop after this duration (safety). */
   maxRecordMs?: number;
   /** Called when transcript is returned. */
@@ -72,6 +76,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     minRecordMs = 900,
     minSpeechMs = 0,
     minTranscribeMs = 1200,
+    minSpeechMsForTranscribe = 2000,
+    disableAdaptiveVad = false,
     maxRecordMs = 15000,
     onTranscript,
     onError,
@@ -283,6 +289,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       setStatus('recording');
       console.log('[useVoiceRecorder] Recording started', { mimeType: recorder.mimeType });
       noSpeechWatchdogRef.current = window.setTimeout(() => {
+        if (disableAdaptiveVad) return;
         if (!speechSeenRef.current && recorderRef.current?.state === 'recording') {
           console.warn('[useVoiceRecorder] No speech detected yet — lowering VAD sensitivity');
           noiseFloorRef.current = Math.max(0.002, noiseFloorRef.current * 0.6);
@@ -312,6 +319,18 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       console.log('[useVoiceRecorder] Raw blob size:', rawBlob.size);
 
       const recordedMs = Date.now() - startedAtRef.current;
+      const speechMs = speechTotalMsRef.current;
+
+      if (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) {
+        const msg = 'No audio detected (no speech)';
+        processingRef.current = false;
+        setStatus('error');
+        setError(msg);
+        onError?.(msg);
+        cleanupRecorderOnly();
+        return;
+      }
+
       if (recordedMs < minTranscribeMs) {
         const msg = 'No audio detected (recording too short)';
         processingRef.current = false;
@@ -472,10 +491,15 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       }
     }
 
-    // Safety max duration stop.
+    // Safety max duration stop — only transcribe if real speech was captured.
     maxStopTimeoutRef.current = window.setTimeout(() => {
       if (recorderRef.current?.state === 'recording') {
-        console.log('[useVoiceRecorder] Auto-stopping on max duration');
+        if (!speechSeenRef.current) {
+          console.log('[useVoiceRecorder] Max duration with no speech — cancel without transcribe');
+          skipTranscribeRef.current = true;
+        } else {
+          console.log('[useVoiceRecorder] Auto-stopping on max duration');
+        }
         stop();
       }
     }, maxRecordMs);
@@ -493,6 +517,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     minRecordMs,
     minSpeechMs,
     minTranscribeMs,
+    minSpeechMsForTranscribe,
+    disableAdaptiveVad,
     onError,
     onProcessing,
     onTranscript,
