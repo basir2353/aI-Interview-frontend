@@ -108,6 +108,7 @@ export default function LiveInterviewPage() {
   const lastCodingQuestionIdRef = useRef<string | null>(null);
   const endedByUnloadRef = useRef(false);
   const introPipelineRanRef = useRef(false);
+  const introPlaybackActiveRef = useRef(false);
   const loadingRef = useRef(false);
   const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
 
@@ -240,6 +241,7 @@ export default function LiveInterviewPage() {
       setVoicePhase('speaking');
     },
     onAutoSpeakEnd: () => {
+      if (introPlaybackActiveRef.current) return;
       noSpeechRetryRef.current = 0;
       userMutedRef.current = false;
       setLiveCaption('');
@@ -657,11 +659,27 @@ export default function LiveInterviewPage() {
 
     const finishIntroAndOpenMic = (questionTurnId?: string) => {
       if (cancelled) return;
+      introPlaybackActiveRef.current = false;
       setIntroSpeaking(false);
       setLiveCaption('');
       userMutedRef.current = false;
       if (questionTurnId) markTurnSpokenRef.current(questionTurnId);
       startAutoListeningWindowRef.current();
+    };
+
+    const resumeLiveSession = (liveState: InterviewState) => {
+      const questionTurn = liveState.turns?.find((t) => t.role === 'ai' && !t.isIntro);
+      const isCodingTurn = Boolean(
+        questionTurn?.isCodingQuestion || questionTurn?.codingStarterCode || questionTurn?.codingLanguage
+      );
+      syncDisplayQuestionFromStateRef.current(liveState);
+      if (questionTurn) {
+        markTurnSpokenRef.current(questionTurn.id);
+      }
+      setVoicePhase('idle');
+      if (voiceEnabled && questionTurn && !isCodingTurn) {
+        finishIntroAndOpenMic(questionTurn.id);
+      }
     };
 
     const speakSegment = async (text: string, isIntroBeat: boolean) => {
@@ -682,9 +700,13 @@ export default function LiveInterviewPage() {
     };
 
     const runVoiceIntro = async (liveState: InterviewState) => {
+      introPlaybackActiveRef.current = true;
       const aiTurns = liveState.turns?.filter((t) => t.role === 'ai') ?? [];
       const introTurns = aiTurns.filter((t) => t.isIntro);
       const questionTurn = aiTurns.find((t) => !t.isIntro);
+      if (questionTurn) {
+        markTurnSpokenRef.current(questionTurn.id);
+      }
       const segments =
         introTurns.length >= 1
           ? [...introTurns.map((t) => t.content.trim()).filter(Boolean), ...(questionTurn?.content?.trim() ? [questionTurn.content.trim()] : [])]
@@ -761,6 +783,16 @@ export default function LiveInterviewPage() {
         if (!liveState) {
           console.error('[Intro] No interview state available');
           introPipelineRanRef.current = false;
+          return;
+        }
+
+        const welcomeAlreadyComplete =
+          liveState.welcomeDelivered &&
+          liveState.turns.some((t) => t.role === 'ai' && t.isIntro) &&
+          liveState.turns.some((t) => t.role === 'ai' && !t.isIntro);
+
+        if (welcomeAlreadyComplete && !needsWelcome) {
+          resumeLiveSession(liveState);
           return;
         }
 

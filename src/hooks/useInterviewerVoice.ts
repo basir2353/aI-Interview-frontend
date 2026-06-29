@@ -85,6 +85,9 @@ export function useInterviewerVoice(
     if (lastAiTurn.id === lastSpokenTurnId.current) return;
     if (skipTurnIds?.has(lastAiTurn.id)) return;
 
+    const introTurnIds = turns.filter((t) => t.role === 'ai' && t.isIntro).map((t) => t.id);
+    if (introTurnIds.includes(lastAiTurn.id)) return;
+
     const fullText = (lastAiTurn.content || '').trim();
     if (!fullText) return;
 
