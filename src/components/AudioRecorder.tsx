@@ -31,6 +31,8 @@ interface AudioRecorderProps {
   minTranscribeMs?: number;
   minSpeechMsForTranscribe?: number;
   disableAdaptiveVad?: boolean;
+  /** When false, recording stops only when user clicks stop (push-to-talk). */
+  autoStopOnSilence?: boolean;
   maxRecordMs?: number;
   stopDelayMs?: number;
   /** ISO 639-1 language for STT (ur, ar, en). */
@@ -59,6 +61,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     minTranscribeMs: minTranscribeMsProp,
     minSpeechMsForTranscribe: minSpeechMsForTranscribeProp,
     disableAdaptiveVad: disableAdaptiveVadProp,
+    autoStopOnSilence: autoStopOnSilenceProp,
     maxRecordMs: maxRecordMsProp,
     stopDelayMs: stopDelayMsProp,
     transcribeLanguage,
@@ -78,7 +81,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     error,
   } = useVoiceRecorder({
     maxRecordMs: maxRecordMsProp ?? 120000,
-    autoStopOnSilence: true,
+    autoStopOnSilence: autoStopOnSilenceProp ?? true,
     silenceMs: silenceMsProp ?? 2200,
     stopDelayMs: stopDelayMsProp ?? 180,
     minRecordMs: minRecordMsProp ?? 600,
@@ -95,13 +98,15 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
       onProcessing?.();
     },
     onError: (message, details) => {
+      if (isNoSpeechError(message)) {
+        onNoSpeech?.();
+        return;
+      }
       console.error('[AudioRecorder] Voice pipeline error:', message, details);
       if (/permission/i.test(message)) {
         alert('Could not access microphone. Please check your browser permissions.');
       }
-      if (isNoSpeechError(message)) {
-        onNoSpeech?.();
-      } else {
+      if (!isNoSpeechError(message)) {
         onTranscriptionError?.(message);
       }
     },

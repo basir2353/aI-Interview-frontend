@@ -9,8 +9,8 @@ interface InterviewStatusBarProps {
 }
 
 const LABELS: Record<VoicePipelinePhase, string> = {
-  idle: 'Ready',
-  listening: 'Listening…',
+  idle: 'Your turn',
+  listening: 'Recording your answer…',
   transcribing: 'Transcribing…',
   thinking: 'Preparing next question…',
   speaking: 'Interviewer speaking…',

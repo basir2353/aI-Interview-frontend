@@ -321,7 +321,16 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       const recordedMs = Date.now() - startedAtRef.current;
       const speechMs = speechTotalMsRef.current;
 
-      if (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) {
+      // Manual push-to-talk: user clicked stop — always send audio to STT (VAD often misses quiet mics).
+      const manualStop = !autoStopOnSilence;
+      const substantialClip = rawBlob.size >= 48000 || recordedMs >= 2000;
+
+      if (
+        autoStopOnSilence &&
+        !manualStop &&
+        (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) &&
+        !substantialClip
+      ) {
         const msg = 'No audio detected (no speech)';
         processingRef.current = false;
         setStatus('error');
@@ -331,7 +340,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         return;
       }
 
-      if (recordedMs < minTranscribeMs) {
+      if (recordedMs < minTranscribeMs && !substantialClip) {
         const msg = 'No audio detected (recording too short)';
         processingRef.current = false;
         setStatus('error');
@@ -507,6 +516,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     recorder.start(250);
     return true;
   }, [
+    autoStopOnSilence,
     autoStopOnSilence,
     acquireStream,
     cancel,

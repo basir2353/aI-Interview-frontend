@@ -221,7 +221,8 @@ export default function LiveInterviewPage() {
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
 
   const notifyReadyForAnswer = useCallback(() => {
-    setMicPrompt('Click the mic button when you are ready to answer. Speak for a few seconds, then click again to finish.');
+    setMicPrompt('');
+    setError('');
     setVoicePhase('idle');
     voicePhaseRef.current = 'idle';
   }, []);
@@ -251,8 +252,7 @@ export default function LiveInterviewPage() {
       setMicOn(false);
       setVoicePhase('idle');
       voicePhaseRef.current = 'idle';
-      noSpeechRetryRef.current += 1;
-      setMicPrompt(`${message} Click the mic button when you are ready to answer.`);
+      setMicPrompt('');
       setError(message);
     },
     [clearAutoListenTimeout]
@@ -363,9 +363,7 @@ export default function LiveInterviewPage() {
       ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
       : countdownRemaining > 0
         ? `Next question in ${countdownRemaining}s`
-        : voicePhase === 'idle' && !loading && !introSpeaking && introCompleteRef.current
-          ? 'Click the mic button when you are ready to answer.'
-          : undefined);
+        : undefined);
 
   const loadState = useCallback(async () => {
     if (!id) return;
@@ -526,16 +524,14 @@ export default function LiveInterviewPage() {
       );
       setVoicePhase('idle');
       if (voiceEnabled && isRejectedCapture) {
-        handleMicCaptureRejected('Could not use that recording.');
-      } else if (voiceEnabled) {
-        setTimeout(() => startAutoListeningWindow(), 500);
+        handleMicCaptureRejected('Could not use that recording. Tap "Start answer", speak, then tap "Submit answer".');
       }
     } finally {
       setLoading(false);
       pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow, handleMicCaptureRejected, syncDisplayQuestionFromState]);
+  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, handleMicCaptureRejected, syncDisplayQuestionFromState]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
@@ -619,38 +615,36 @@ export default function LiveInterviewPage() {
   };
 
   const handleMicToggle = () => {
+    void handleAnswerButton();
+  };
+
+  const handleAnswerButton = useCallback(() => {
     clearAutoListenTimeout();
     autoListeningRef.current = false;
     const recorder = audioRecorderRef.current;
+
+    if (recorder?.busy && !recorder?.listening) {
+      return;
+    }
+
     if (recorder?.listening) {
+      userMutedRef.current = false;
+      setMicPrompt('Processing your answer…');
       recorder.stop();
       return;
     }
-    const micActive =
-      micOn ||
-      voicePhase === 'transcribing' ||
-      autoListeningRef.current ||
-      recorder?.busy;
-    if (micActive) {
-      userMutedRef.current = true;
-      autoListeningRef.current = false;
-      recorder?.cancel();
-      setMicOn(false);
-      setVoicePhase('idle');
-      setMicPrompt('Microphone muted. Click the mic button when you are ready to answer.');
-      setError('');
-      return;
-    }
+
     if (loading || pipelineBusyRef.current || interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
       setError('Please wait for the interviewer to finish speaking.');
       return;
     }
+
     userMutedRef.current = false;
     noSpeechRetryRef.current = 0;
-    setMicPrompt('Listening… speak your answer, then click the mic again when finished.');
     setError('');
+    setMicPrompt('Recording… speak now, then tap "Submit answer" when done.');
     void recorder?.start();
-  };
+  }, [clearAutoListenTimeout, loading]);
 
   const handleCameraToggle = () => {
     setCameraOn((p) => !p);
@@ -1106,6 +1100,20 @@ export default function LiveInterviewPage() {
   /** When true, use 50/50 split: left = interview, right = code editor + terminal. */
   const codePanelOpen = Boolean(showCodeTab && activeTab === 'code');
 
+  const canAnswer =
+    roomPhase === 'live' &&
+    !loading &&
+    !codingTurnActive &&
+    introCompleteRef.current &&
+    voicePhase !== 'speaking' &&
+    !introSpeaking;
+
+  const answerButtonLabel = micOn
+    ? 'Submit answer'
+    : voicePhase === 'transcribing' || voicePhase === 'thinking'
+      ? 'Please wait…'
+      : 'Start answer';
+
   if (roomPhase === 'device-check') {
     return (
       <InterviewDeviceCheck
@@ -1136,27 +1144,24 @@ export default function LiveInterviewPage() {
         clearAutoListenTimeout();
         setMicOn(false);
         setVoicePhase('idle');
-        if (/no audio detected|empty recording|empty transcript|recording too short|no speech detected/i.test(msg)) {
-          handleMicCaptureRejected('I could not hear your voice.');
-          return;
-        }
+        setMicPrompt('');
         setError(
           msg.includes('timed out')
-            ? 'Transcription took too long. Please speak a shorter answer and try again.'
-            : 'Transcription failed. Click the mic button and try again.'
+            ? 'Transcription took too long. Please try a shorter answer.'
+            : msg
         );
       }}
       silenceMs={4000}
-      minRecordMs={2000}
-      minSpeechMs={1500}
-      minTranscribeMs={2500}
-      minSpeechMsForTranscribe={2500}
+      minRecordMs={800}
+      minSpeechMs={400}
+      minTranscribeMs={800}
+      minSpeechMsForTranscribe={800}
+      autoStopOnSilence={false}
       disableAdaptiveVad
       stopDelayMs={600}
       maxRecordMs={120000}
       onNoSpeech={() => {
-        if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
-        handleMicCaptureRejected('I could not hear your answer clearly.');
+        handleMicCaptureRejected('Recording was too short. Tap "Start answer", speak clearly, then tap "Submit answer".');
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}
@@ -1607,6 +1612,27 @@ export default function LiveInterviewPage() {
               micOn={micOn}
               detail={voiceStatusDetail}
             />
+            {!codingTurnActive && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => void handleAnswerButton()}
+                  disabled={!canAnswer || voicePhase === 'transcribing' || voicePhase === 'thinking'}
+                  className={`w-full rounded-xl px-4 py-3.5 text-sm font-semibold transition ${
+                    micOn
+                      ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                      : 'bg-[var(--interview-accent)] text-white hover:opacity-90'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {answerButtonLabel}
+                </button>
+                <p className="text-center text-xs text-[var(--interview-muted)]">
+                  {micOn
+                    ? 'Speak your answer, then tap Submit answer.'
+                    : 'When the interviewer finishes, tap Start answer → speak → Submit answer.'}
+                </p>
+              </div>
+            )}
             {error && (
               <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
             )}
