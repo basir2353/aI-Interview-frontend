@@ -17,6 +17,8 @@ export interface UseVoiceRecorderOptions {
   minRecordMs?: number;
   /** Only allow silence to stop after at least this much speech (ms). Prevents stopping on initial pause. */
   minSpeechMs?: number;
+  /** Minimum clip length before sending to STT (blocks brief noise clips). */
+  minTranscribeMs?: number;
   /** Hard stop after this duration (safety). */
   maxRecordMs?: number;
   /** Called when transcript is returned. */
@@ -69,6 +71,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     stopDelayMs = 250,
     minRecordMs = 900,
     minSpeechMs = 0,
+    minTranscribeMs = 1200,
     maxRecordMs = 15000,
     onTranscript,
     onError,
@@ -308,6 +311,17 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
       console.log('[useVoiceRecorder] Raw blob size:', rawBlob.size);
 
+      const recordedMs = Date.now() - startedAtRef.current;
+      if (recordedMs < minTranscribeMs) {
+        const msg = 'No audio detected (recording too short)';
+        processingRef.current = false;
+        setStatus('error');
+        setError(msg);
+        onError?.(msg);
+        cleanupRecorderOnly();
+        return;
+      }
+
       if (!rawBlob.size) {
         const msg = 'No audio detected (empty recording)';
         processingRef.current = false;
@@ -478,6 +492,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     maxRecordMs,
     minRecordMs,
     minSpeechMs,
+    minTranscribeMs,
     onError,
     onProcessing,
     onTranscript,

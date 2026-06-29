@@ -28,6 +28,7 @@ interface AudioRecorderProps {
   silenceMs?: number;
   minRecordMs?: number;
   minSpeechMs?: number;
+  minTranscribeMs?: number;
   maxRecordMs?: number;
   stopDelayMs?: number;
   /** ISO 639-1 language for STT (ur, ar, en). */
@@ -37,7 +38,7 @@ interface AudioRecorderProps {
 }
 
 function isNoSpeechError(message: string): boolean {
-  return /no audio detected|empty recording|empty transcript/i.test(message);
+  return /no audio detected|empty recording|empty transcript|recording too short|no speech detected/i.test(message);
 }
 
 export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>(function AudioRecorder(
@@ -53,6 +54,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     silenceMs: silenceMsProp,
     minRecordMs: minRecordMsProp,
     minSpeechMs: minSpeechMsProp,
+    minTranscribeMs: minTranscribeMsProp,
     maxRecordMs: maxRecordMsProp,
     stopDelayMs: stopDelayMsProp,
     transcribeLanguage,
@@ -77,6 +79,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     stopDelayMs: stopDelayMsProp ?? 180,
     minRecordMs: minRecordMsProp ?? 600,
     minSpeechMs: minSpeechMsProp ?? 400,
+    minTranscribeMs: minTranscribeMsProp ?? 1200,
     transcribeLanguage,
     transcribeMixed,
     onTranscript: (text) => {

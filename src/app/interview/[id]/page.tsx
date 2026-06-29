@@ -19,6 +19,7 @@ import {
   TTS_LIVE_ROOM_READY_MS,
 } from '@/lib/ttsConfig';
 import { isLikelyInterviewerEcho } from '@/lib/echoGuard';
+import { isInvalidCandidateTranscript } from '@/lib/sttGuard';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
@@ -218,15 +219,38 @@ export default function LiveInterviewPage() {
 
   /** Wait for TTS echo to settle, then open the mic once. */
   const scheduleAutoListen = useCallback(() => {
+    if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
     markMicEligibleAfterTts();
     clearAutoListenTimeout();
     const waitMs = Math.max(0, micEligibleAfterRef.current - Date.now());
     autoListenScheduleRef.current = setTimeout(() => {
       autoListenScheduleRef.current = null;
       if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
+      if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
       startAutoListeningWindow();
     }, waitMs);
   }, [clearAutoListenTimeout, markMicEligibleAfterTts, startAutoListeningWindow]);
+
+  const handleMicCaptureRejected = useCallback(
+    (message: string) => {
+      autoListeningRef.current = false;
+      clearAutoListenTimeout();
+      setMicOn(false);
+      setVoicePhase('idle');
+      noSpeechRetryRef.current += 1;
+      if (noSpeechRetryRef.current >= 2) {
+        autoListeningRef.current = false;
+        setError(`${message} Click the mic button when you are ready to answer.`);
+        return;
+      }
+      setError(message);
+      window.setTimeout(() => {
+        if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
+        scheduleAutoListen();
+      }, 2000);
+    },
+    [clearAutoListenTimeout, scheduleAutoListen]
+  );
 
   useEffect(() => {
     return subscribeInterviewerSpeaking((speaking) => {
@@ -415,6 +439,7 @@ export default function LiveInterviewPage() {
     if (!lastAiTurn) return;
     if (autoListenQuestionIdRef.current === lastAiTurn.id) return;
     autoListenQuestionIdRef.current = lastAiTurn.id;
+    noSpeechRetryRef.current = 0;
 
     // When voice is ON: do not start listening here — wait for the full question to be spoken, then onAutoSpeakEnd will start listening.
     // When voice is OFF: start listening now so the user can answer without TTS.
@@ -481,13 +506,18 @@ export default function LiveInterviewPage() {
         }
       }
       setAnswerText('');
+      noSpeechRetryRef.current = 0;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to submit';
-      const isEcho = /interviewer|echo/i.test(msg);
-      setError(isEcho ? 'Please wait for the question to finish, then answer in your own words.' : msg);
+      const isRejectedCapture = /interviewer|echo|no clear answer|invalid transcript|no speech/i.test(msg);
+      setError(
+        isRejectedCapture
+          ? 'Please wait for the question to finish, then speak clearly for a few seconds before stopping.'
+          : msg
+      );
       setVoicePhase('idle');
-      if (voiceEnabled && isEcho) {
-        scheduleAutoListen();
+      if (voiceEnabled && isRejectedCapture) {
+        handleMicCaptureRejected('Could not use that recording.');
       } else if (voiceEnabled) {
         setTimeout(() => startAutoListeningWindow(), 500);
       }
@@ -496,7 +526,7 @@ export default function LiveInterviewPage() {
       pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow, scheduleAutoListen, syncDisplayQuestionFromState]);
+  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow, handleMicCaptureRejected, syncDisplayQuestionFromState]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
@@ -509,13 +539,9 @@ export default function LiveInterviewPage() {
           .reverse()
           .find((t) => t.role === 'ai' && !t.isIntro)?.content ||
         '';
-      if (isLikelyInterviewerEcho(cleaned, lastAiText)) {
-        console.warn('[Interview] Ignoring likely TTS echo transcript');
-        autoListeningRef.current = false;
-        setMicOn(false);
-        setVoicePhase('idle');
-        setError('I heard the interviewer instead of your voice. Wait for the question to finish, then speak.');
-        scheduleAutoListen();
+      if (isLikelyInterviewerEcho(cleaned, lastAiText) || isInvalidCandidateTranscript(cleaned)) {
+        console.warn('[Interview] Ignoring invalid or hallucinated transcript', { preview: cleaned.slice(0, 80) });
+        handleMicCaptureRejected('I did not hear a clear answer from you.');
         return;
       }
 
@@ -537,7 +563,7 @@ export default function LiveInterviewPage() {
       // Submit immediately so the interview feels natural and efficient
       void submitAnswerText(cleaned);
     },
-    [clearAutoListenTimeout, submitAnswerText, displayQuestion, state?.turns, scheduleAutoListen]
+    [clearAutoListenTimeout, submitAnswerText, displayQuestion, state?.turns, handleMicCaptureRejected]
   );
 
   const handleSubmitAnswer = () => {
@@ -1094,33 +1120,25 @@ export default function LiveInterviewPage() {
         clearAutoListenTimeout();
         setMicOn(false);
         setVoicePhase('idle');
+        if (/no audio detected|empty recording|empty transcript|recording too short|no speech detected/i.test(msg)) {
+          handleMicCaptureRejected('I could not hear your voice.');
+          return;
+        }
         setError(
           msg.includes('timed out')
             ? 'Transcription took too long. Please speak a shorter answer and try again.'
             : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={2500}
-      minRecordMs={700}
-      minSpeechMs={350}
-      stopDelayMs={400}
+      silenceMs={3500}
+      minRecordMs={1500}
+      minSpeechMs={1200}
+      minTranscribeMs={1800}
+      stopDelayMs={500}
       maxRecordMs={120000}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
-        if (noSpeechRetryRef.current >= 3) {
-          autoListeningRef.current = false;
-          setVoicePhase('idle');
-          setMicOn(false);
-          setError('I could not hear your answer clearly. Speak louder, then click the mic button when you finish your answer.');
-          return;
-        }
-        noSpeechRetryRef.current += 1;
-        setError('');
-        setTimeout(() => {
-          if (!autoListeningRef.current || loading || !voiceEnabled || userMutedRef.current) return;
-          if (audioRecorderRef.current?.busy) return;
-          startAutoListeningWindow();
-        }, 600);
+        handleMicCaptureRejected('I could not hear your answer clearly.');
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}
