@@ -14,4 +14,4 @@ export const TTS_AFTER_SPEAK_MIC_DELAY_MS = 80;
 export const TTS_INTRO_TO_QUESTION_PAUSE_MS = 50;
 
 /** Delay before live-room intro TTS starts (UI paint). */
-export const TTS_LIVE_ROOM_READY_MS = 120;
+export const TTS_LIVE_ROOM_READY_MS = 40;

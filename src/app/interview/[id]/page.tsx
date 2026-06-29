@@ -109,6 +109,8 @@ export default function LiveInterviewPage() {
   const endedByUnloadRef = useRef(false);
   const introPipelineRanRef = useRef(false);
   const introPlaybackActiveRef = useRef(false);
+  const introCompleteRef = useRef(false);
+  const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
   const loadingRef = useRef(false);
   const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
 
@@ -119,6 +121,7 @@ export default function LiveInterviewPage() {
   useEffect(() => {
     if (roomPhase !== 'live') {
       introPipelineRanRef.current = false;
+      introCompleteRef.current = false;
     }
   }, [roomPhase]);
 
@@ -330,8 +333,9 @@ export default function LiveInterviewPage() {
   }, [notepadStorageKey, notepadNotes]);
 
   useEffect(() => {
+    if (roomPhase === 'live' && !introCompleteRef.current) return;
     syncDisplayQuestionFromState(state);
-  }, [state, syncDisplayQuestionFromState]);
+  }, [state, roomPhase, syncDisplayQuestionFromState]);
 
   useEffect(() => {
     if (!state?.turns) return;
@@ -612,6 +616,31 @@ export default function LiveInterviewPage() {
   }, [enterInstructionsPhase, roomPhase]);
 
   useEffect(() => {
+    if (roomPhase !== 'instructions' || !id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const liveState = await api.getState(id);
+        if (cancelled || !liveState) return;
+        const needsWelcome =
+          !liveState.welcomeDelivered ||
+          !liveState.turns.some((t) => t.role === 'ai' && t.isIntro);
+        if (needsWelcome) {
+          const res = await api.beginLiveInterview(id);
+          if (!cancelled) prefetchedLiveStateRef.current = res.state;
+        } else {
+          prefetchedLiveStateRef.current = liveState;
+        }
+      } catch {
+        // live entry will retry
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomPhase, id]);
+
+  useEffect(() => {
     if (roomPhase !== 'instructions') return;
     void audioRecorderRef.current?.warmUp?.();
   }, [roomPhase]);
@@ -655,13 +684,15 @@ export default function LiveInterviewPage() {
 
     let cancelled = false;
 
-    const pause = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-    const finishIntroAndOpenMic = (questionTurnId?: string) => {
+    const finishIntroAndOpenMic = (questionTurnId?: string, questionText?: string) => {
       if (cancelled) return;
       introPlaybackActiveRef.current = false;
+      introCompleteRef.current = true;
       setIntroSpeaking(false);
       setLiveCaption('');
+      if (questionText?.trim()) {
+        setDisplayQuestion(questionText.trim());
+      }
       userMutedRef.current = false;
       if (questionTurnId) markTurnSpokenRef.current(questionTurnId);
       startAutoListeningWindowRef.current();
@@ -672,31 +703,17 @@ export default function LiveInterviewPage() {
       const isCodingTurn = Boolean(
         questionTurn?.isCodingQuestion || questionTurn?.codingStarterCode || questionTurn?.codingLanguage
       );
-      syncDisplayQuestionFromStateRef.current(liveState);
+      introCompleteRef.current = true;
+      if (questionTurn?.content?.trim()) {
+        setDisplayQuestion(questionTurn.content.trim());
+      }
       if (questionTurn) {
         markTurnSpokenRef.current(questionTurn.id);
       }
       setVoicePhase('idle');
       if (voiceEnabled && questionTurn && !isCodingTurn) {
-        finishIntroAndOpenMic(questionTurn.id);
+        finishIntroAndOpenMic(questionTurn.id, questionTurn.content);
       }
-    };
-
-    const speakSegment = async (text: string, isIntroBeat: boolean) => {
-      await speakInterviewerText(text, {
-        lang: interviewLang,
-        persona: interviewerPersona,
-        onStart: () => {
-          clearAutoListenTimeoutRef.current();
-          autoListeningRef.current = false;
-          audioRecorderRef.current?.cancel();
-          setMicOn(false);
-          setVoicePhase('speaking');
-          setIntroSpeaking(isIntroBeat);
-          setLiveCaption(text);
-          if (!isIntroBeat) setDisplayQuestion(text);
-        },
-      });
     };
 
     const runVoiceIntro = async (liveState: InterviewState) => {
@@ -707,62 +724,55 @@ export default function LiveInterviewPage() {
       if (questionTurn) {
         markTurnSpokenRef.current(questionTurn.id);
       }
-      const segments =
-        introTurns.length >= 1
-          ? [...introTurns.map((t) => t.content.trim()).filter(Boolean), ...(questionTurn?.content?.trim() ? [questionTurn.content.trim()] : [])]
-          : aiTurns[0]?.content?.trim()
-            ? [aiTurns[0].content.trim(), ...(aiTurns[1]?.content?.trim() ? [aiTurns[1].content.trim()] : [])]
-            : [];
 
-      if (segments.length === 0) {
-        finishIntroAndOpenMic(questionTurn?.id);
+      const introText = introTurns.map((t) => t.content.trim()).filter(Boolean).join(' ');
+      const questionText = questionTurn?.content?.trim() ?? '';
+
+      if (!introText && !questionText) {
+        finishIntroAndOpenMic(questionTurn?.id, questionText);
         return;
       }
 
-      const introSegmentCount = introTurns.length >= 1 ? introTurns.length : Math.max(0, segments.length - 1);
+      const fullSpeech = [introText, questionText].filter(Boolean).join(' ');
 
       try {
         setIntroSpeaking(true);
-        const introTexts = segments.slice(0, introSegmentCount).filter(Boolean);
-        const questionTexts = segments.slice(introSegmentCount).filter(Boolean);
-
-        if (introTexts.length > 0) {
-          if (cancelled) return;
-          const combinedIntro = introTexts.join(' ');
-          setLiveCaption(combinedIntro);
-          setIntroSpeaking(true);
-          await speakSegment(combinedIntro, true);
-          if (questionTexts.length > 0) {
-            await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
-          }
+        setLiveCaption(introText || 'Welcome');
+        setDisplayQuestion('');
+        await speakInterviewerText(fullSpeech, {
+          lang: interviewLang,
+          persona: interviewerPersona,
+          onStart: () => {
+            clearAutoListenTimeoutRef.current();
+            autoListeningRef.current = false;
+            audioRecorderRef.current?.cancel();
+            setMicOn(false);
+            setVoicePhase('speaking');
+            setIntroSpeaking(true);
+          },
+        });
+        if (cancelled) return;
+        if (questionText) {
+          setDisplayQuestion(questionText);
         }
-
-        if (questionTexts.length > 0) {
-          if (cancelled) return;
-          const combinedQuestion = questionTexts.join(' ');
-          setLiveCaption(combinedQuestion);
-          setIntroSpeaking(false);
-          setDisplayQuestion(combinedQuestion);
-          await speakSegment(combinedQuestion, false);
-        } else if (questionTurn?.content?.trim()) {
-          setDisplayQuestion(questionTurn.content.trim());
-        }
-
-        await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
-        finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
+        finishIntroAndOpenMic(questionTurn?.id, questionText);
       } catch (e) {
         console.error('[Intro] Speech pipeline error', e);
-        finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
+        if (questionText) setDisplayQuestion(questionText);
+        finishIntroAndOpenMic(questionTurn?.id, questionText);
       }
     };
 
     const beginAndSpeak = async () => {
       try {
-        let liveState: InterviewState | null = null;
-        try {
-          liveState = await api.getState(id);
-        } catch {
-          liveState = null;
+        let liveState: InterviewState | null = prefetchedLiveStateRef.current;
+
+        if (!liveState) {
+          try {
+            liveState = await api.getState(id);
+          } catch {
+            liveState = null;
+          }
         }
 
         const needsWelcome =
@@ -773,11 +783,10 @@ export default function LiveInterviewPage() {
           const res = await api.beginLiveInterview(id);
           if (cancelled) return;
           liveState = res.state;
+          prefetchedLiveStateRef.current = res.state;
           setState(res.state);
-          syncDisplayQuestionFromStateRef.current(res.state);
         } else if (liveState) {
           setState(liveState);
-          syncDisplayQuestionFromStateRef.current(liveState);
         }
 
         if (!liveState) {
@@ -954,7 +963,7 @@ export default function LiveInterviewPage() {
   const lastAiTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro)
     ?? [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
   const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
-  const currentQuestion = displayQuestion || lastAiTurn?.content || 'Preparing your next question...';
+  const currentQuestion = displayQuestion || 'Getting your interview ready…';
   const panelLabel =
     voicePhase === 'speaking' && introSpeaking ? 'Introduction' : 'Current question';
   const panelText =
