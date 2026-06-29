@@ -18,6 +18,8 @@ import {
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
   TTS_LIVE_ROOM_READY_MS,
 } from '@/lib/ttsConfig';
+import { useInterviewEngagement } from '@/hooks/useInterviewEngagement';
+import { instantAckPhrase } from '@/lib/interviewEngagement';
 import { isLikelyInterviewerEcho } from '@/lib/echoGuard';
 import { isInvalidCandidateTranscript } from '@/lib/sttGuard';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
@@ -113,6 +115,7 @@ export default function LiveInterviewPage() {
   const introPlaybackActiveRef = useRef(false);
   const introCompleteRef = useRef(false);
   const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
+  const ackSpokenRef = useRef(false);
   const interviewerSpeakingRef = useRef(false);
   const loadingRef = useRef(false);
   const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
@@ -350,15 +353,30 @@ export default function LiveInterviewPage() {
   }, []);
 
   const voiceStatusPhase: VoicePipelinePhase =
-    loading ? 'thinking' : introSpeaking ? 'speaking' : voicePhase === 'listening' && !micOn ? 'idle' : voicePhase;
+    loading || voicePhase === 'transcribing'
+      ? 'thinking'
+      : introSpeaking
+        ? 'speaking'
+        : voicePhase === 'listening' && !micOn
+          ? 'idle'
+          : voicePhase;
+
+  const pipelineWaiting =
+    roomPhase === 'live' &&
+    (voicePhase === 'thinking' || voicePhase === 'transcribing' || loading);
+
+  const engagementMessage = useInterviewEngagement(pipelineWaiting, interviewLang);
+
   const voiceStatusDetail =
-    loading && answerText
-      ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
-      : countdownRemaining > 0
-        ? `Next question in ${countdownRemaining}s`
-        : micOn
-          ? 'Speak naturally — we will detect when you finish.'
-          : undefined;
+    pipelineWaiting && engagementMessage
+      ? engagementMessage
+      : loading && answerText
+        ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
+        : countdownRemaining > 0
+          ? `Next question in ${countdownRemaining}s`
+          : micOn
+            ? 'Speak naturally — we will detect when you finish.'
+            : undefined;
 
   const loadState = useCallback(async () => {
     if (!id) return;
@@ -509,6 +527,7 @@ export default function LiveInterviewPage() {
       }
       setAnswerText('');
       noSpeechRetryRef.current = 0;
+      ackSpokenRef.current = false;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to submit';
       const isRejectedCapture = /interviewer|echo|no clear answer|invalid transcript|no speech/i.test(msg);
@@ -548,7 +567,7 @@ export default function LiveInterviewPage() {
       }
 
       setMicOn(false);
-      setVoicePhase('transcribing');
+      setVoicePhase('thinking');
       setAnswerText(cleaned);
       autoListeningRef.current = false;
       noSpeechRetryRef.current = 0;
@@ -1110,8 +1129,14 @@ export default function LiveInterviewPage() {
       onTranscript={handleVoiceTranscript}
       onProcessing={() => {
         setMicOn(false);
-        if (!userMutedRef.current) {
-          setVoicePhase('transcribing');
+        setVoicePhase('thinking');
+        setError('');
+        if (!userMutedRef.current && voiceEnabled && roomPhase === 'live' && !ackSpokenRef.current) {
+          ackSpokenRef.current = true;
+          void speakInterviewerText(instantAckPhrase(interviewLang), {
+            lang: interviewLang,
+            persona: interviewerPersona,
+          });
         }
       }}
       onTranscriptionError={(msg) => {
@@ -1129,7 +1154,7 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Tap the mic icon to try again.'
         );
       }}
-      silenceMs={2800}
+      silenceMs={2200}
       minRecordMs={1000}
       minSpeechMs={600}
       minTranscribeMs={1000}

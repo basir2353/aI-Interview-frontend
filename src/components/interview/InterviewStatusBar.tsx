@@ -11,8 +11,8 @@ interface InterviewStatusBarProps {
 const LABELS: Record<VoicePipelinePhase, string> = {
   idle: 'Your turn',
   listening: 'Listening…',
-  transcribing: 'Transcribing…',
-  thinking: 'Preparing next question…',
+  transcribing: 'One moment…',
+  thinking: 'One moment…',
   speaking: 'Interviewer speaking…',
 };
 
