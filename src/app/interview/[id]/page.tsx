@@ -158,14 +158,27 @@ export default function LiveInterviewPage() {
   useEffect(() => {
     return subscribeInterviewerSpeaking((speaking) => {
       interviewerSpeakingRef.current = speaking;
-      if (!speaking) return;
-      clearAutoListenTimeout();
-      autoListeningRef.current = false;
-      audioRecorderRef.current?.cancel();
-      setMicOn(false);
-      setVoicePhase('speaking');
+      if (speaking) {
+        clearAutoListenTimeout();
+        autoListeningRef.current = false;
+        audioRecorderRef.current?.cancel();
+        setMicOn(false);
+        setVoicePhase('speaking');
+        return;
+      }
+      setIntroSpeaking(false);
+      if (voicePhaseRef.current === 'speaking') {
+        voicePhaseRef.current = 'idle';
+        setVoicePhase('idle');
+      }
+      if (introPlaybackActiveRef.current || loadingRef.current || pipelineBusyRef.current) return;
+      window.setTimeout(() => {
+        if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
+        if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current || userMutedRef.current) return;
+        startAutoListeningWindowRef.current();
+      }, TTS_AFTER_SPEAK_MIC_DELAY_MS + 250);
     });
-  }, [clearAutoListenTimeout]);
+  }, [clearAutoListenTimeout, voiceEnabled]);
 
   const startAutoListeningWindow = useCallback(() => {
     const latestAi = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
@@ -263,9 +276,12 @@ export default function LiveInterviewPage() {
       noSpeechRetryRef.current = 0;
       userMutedRef.current = false;
       setLiveCaption('');
+      setIntroSpeaking(false);
+      voicePhaseRef.current = 'idle';
+      setVoicePhase('idle');
       setTimeout(() => {
         if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current || userMutedRef.current) return;
-        if (voicePhaseRef.current === 'speaking') return;
+        if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
         startAutoListeningWindow();
       }, TTS_AFTER_SPEAK_MIC_DELAY_MS);
     },
@@ -686,6 +702,8 @@ export default function LiveInterviewPage() {
       introCompleteRef.current = true;
       setIntroSpeaking(false);
       setLiveCaption('');
+      voicePhaseRef.current = 'idle';
+      setVoicePhase('idle');
       if (questionText?.trim()) {
         setDisplayQuestion(questionText.trim());
       }
