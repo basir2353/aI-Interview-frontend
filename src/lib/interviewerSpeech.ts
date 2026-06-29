@@ -44,8 +44,9 @@ async function speakViaBrowser(
   trimmed: string,
   synthesisLang: string,
   generation: number,
-  options?: { onStart?: () => void; onEnd?: () => void }
+  options?: { onStart?: () => void; onEnd?: () => void; engagement?: boolean }
 ): Promise<void> {
+  const engagement = options?.engagement === true;
   if (!window.speechSynthesis) {
     options?.onStart?.();
     options?.onEnd?.();
@@ -64,7 +65,7 @@ async function speakViaBrowser(
       settled = true;
       if (resumeInterval) clearInterval(resumeInterval);
       if (timeoutId) clearTimeout(timeoutId);
-      setInterviewerSpeaking(false);
+      if (!engagement) setInterviewerSpeaking(false);
       options?.onEnd?.();
       resolve();
     };
@@ -90,7 +91,7 @@ async function speakViaBrowser(
 
     utterance.onstart = () => {
       if (generation !== speakGeneration) return;
-      setInterviewerSpeaking(true);
+      if (!engagement) setInterviewerSpeaking(true);
       options?.onStart?.();
     };
     utterance.onend = done;
@@ -110,6 +111,8 @@ export async function speakInterviewerText(
     persona?: InterviewerPersona | string;
     onStart?: () => void;
     onEnd?: () => void;
+    /** Short ack/bridge lines — must not trigger auto-mic after playback. */
+    engagement?: boolean;
   }
 ): Promise<void> {
   const trimmed = text.trim();
@@ -130,6 +133,7 @@ export async function speakInterviewerText(
     await Promise.race([
       speakViaServerTts(trimmed, interviewLang, {
         persona: options?.persona,
+        engagement: options?.engagement,
         onStart: () => {
           if (generation !== speakGeneration) return;
           options?.onStart?.();

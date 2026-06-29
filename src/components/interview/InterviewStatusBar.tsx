@@ -6,6 +6,8 @@ interface InterviewStatusBarProps {
   phase: VoicePipelinePhase;
   micOn: boolean;
   detail?: string;
+  /** Warm human label (overrides default English labels). */
+  statusLabel?: string;
 }
 
 const LABELS: Record<VoicePipelinePhase, string> = {
@@ -16,10 +18,10 @@ const LABELS: Record<VoicePipelinePhase, string> = {
   speaking: 'Interviewer speaking…',
 };
 
-export function InterviewStatusBar({ phase, micOn, detail }: InterviewStatusBarProps) {
+export function InterviewStatusBar({ phase, micOn, detail, statusLabel }: InterviewStatusBarProps) {
   const isActivelyListening = phase === 'listening' && micOn;
   const displayPhase: VoicePipelinePhase = isActivelyListening ? 'listening' : phase === 'listening' ? 'idle' : phase;
-  const label = LABELS[displayPhase];
+  const label = statusLabel ?? LABELS[displayPhase];
   const showPulse =
     isActivelyListening || phase === 'thinking' || phase === 'transcribing';
 

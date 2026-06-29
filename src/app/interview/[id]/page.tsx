@@ -19,7 +19,8 @@ import {
   TTS_LIVE_ROOM_READY_MS,
 } from '@/lib/ttsConfig';
 import { useInterviewEngagement } from '@/hooks/useInterviewEngagement';
-import { instantAckPhrase } from '@/lib/interviewEngagement';
+import { useInterviewHumanVoice } from '@/hooks/useInterviewHumanVoice';
+import { humanStatusLabel, instantAckPhrase, reflectiveAckPhrase } from '@/lib/interviewEngagement';
 import { isLikelyInterviewerEcho } from '@/lib/echoGuard';
 import { isInvalidCandidateTranscript } from '@/lib/sttGuard';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
@@ -115,7 +116,8 @@ export default function LiveInterviewPage() {
   const introPlaybackActiveRef = useRef(false);
   const introCompleteRef = useRef(false);
   const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
-  const ackSpokenRef = useRef(false);
+  const [interviewerCaption, setInterviewerCaption] = useState('');
+  const cancelHumanSpeechRef = useRef<() => void>(() => {});
   const interviewerSpeakingRef = useRef(false);
   const loadingRef = useRef(false);
   const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
@@ -236,6 +238,8 @@ export default function LiveInterviewPage() {
 
   const handleMicCaptureRejected = useCallback(
     (message: string) => {
+      pipelineBusyRef.current = false;
+      cancelHumanSpeechRef.current();
       autoListeningRef.current = false;
       clearAutoListenTimeout();
       setMicOn(false);
@@ -272,6 +276,8 @@ export default function LiveInterviewPage() {
         setVoicePhase('idle');
       }
       if (introPlaybackActiveRef.current || loadingRef.current || pipelineBusyRef.current) return;
+      if (submitInFlightRef.current) return;
+      if (voicePhaseRef.current === 'thinking' || voicePhaseRef.current === 'transcribing') return;
       if (!voiceEnabled || userMutedRef.current) return;
       scheduleAutoListen();
     });
@@ -313,6 +319,7 @@ export default function LiveInterviewPage() {
   const { stopSpeaking, markTurnSpoken } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
     onSpeakText: handleAiSpeakText,
     onAutoSpeakStart: () => {
+      cancelHumanSpeechRef.current();
       clearAutoListenTimeout();
       autoListeningRef.current = false;
       noSpeechRetryRef.current = 0;
@@ -367,16 +374,45 @@ export default function LiveInterviewPage() {
 
   const engagementMessage = useInterviewEngagement(pipelineWaiting, interviewLang);
 
+  const interviewerFirstNameEarly =
+    interviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan';
+
+  const humanVoice = useInterviewHumanVoice({
+    interviewLang,
+    persona: interviewerPersona,
+    voiceEnabled,
+    pipelineWaiting,
+    loading,
+    onCaption: setInterviewerCaption,
+    interviewerFirstName: interviewerFirstNameEarly,
+  });
+
+  useEffect(() => {
+    cancelHumanSpeechRef.current = humanVoice.cancelHumanSpeech;
+  }, [humanVoice.cancelHumanSpeech]);
+
+  const humanStatusPhase: 'idle' | 'listening' | 'thinking' | 'speaking' =
+    voiceStatusPhase === 'speaking' || introSpeaking
+      ? 'speaking'
+      : voiceStatusPhase === 'listening' && micOn
+        ? 'listening'
+        : pipelineWaiting
+          ? 'thinking'
+          : 'idle';
+
+  const humanStatusText = humanStatusLabel(interviewLang, humanStatusPhase, interviewerFirstNameEarly);
+
   const voiceStatusDetail =
-    pipelineWaiting && engagementMessage
+    interviewerCaption ||
+    (pipelineWaiting && engagementMessage
       ? engagementMessage
       : loading && answerText
         ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
         : countdownRemaining > 0
           ? `Next question in ${countdownRemaining}s`
           : micOn
-            ? 'Speak naturally — we will detect when you finish.'
-            : undefined;
+            ? undefined
+            : undefined);
 
   const loadState = useCallback(async () => {
     if (!id) return;
@@ -495,6 +531,7 @@ export default function LiveInterviewPage() {
     if (!text || loading || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
     pipelineBusyRef.current = true;
+    cancelHumanSpeechRef.current();
     setPendingAnswer(null);
     setCountdownRemaining(0);
     pendingAnswerRef.current = null;
@@ -527,7 +564,6 @@ export default function LiveInterviewPage() {
       }
       setAnswerText('');
       noSpeechRetryRef.current = 0;
-      ackSpokenRef.current = false;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to submit';
       const isRejectedCapture = /interviewer|echo|no clear answer|invalid transcript|no speech/i.test(msg);
@@ -552,7 +588,10 @@ export default function LiveInterviewPage() {
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       const cleaned = text.trim();
-      if (!cleaned) return;
+      if (!cleaned) {
+        pipelineBusyRef.current = false;
+        return;
+      }
 
       const lastAiText =
         displayQuestion.trim() ||
@@ -560,8 +599,9 @@ export default function LiveInterviewPage() {
           .reverse()
           .find((t) => t.role === 'ai' && !t.isIntro)?.content ||
         '';
-      if (isLikelyInterviewerEcho(cleaned, lastAiText) || isInvalidCandidateTranscript(cleaned, interviewLang)) {
+      if (isLikelyInterviewerEcho(cleaned, lastAiText, interviewLang) || isInvalidCandidateTranscript(cleaned, interviewLang)) {
         console.warn('[Interview] Ignoring invalid or hallucinated transcript', { preview: cleaned.slice(0, 80) });
+        pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
@@ -581,10 +621,26 @@ export default function LiveInterviewPage() {
         clearInterval(countdownIntervalRef.current);
         countdownIntervalRef.current = null;
       }
-      // Submit immediately so the interview feels natural and efficient
+
+      if (voiceEnabled) {
+        humanVoice.cancelHumanSpeech();
+        void humanVoice.speakLine(
+          reflectiveAckPhrase(cleaned, interviewLang, interviewerFirstNameEarly)
+        );
+      }
       void submitAnswerText(cleaned);
     },
-    [clearAutoListenTimeout, submitAnswerText, displayQuestion, state?.turns, handleMicCaptureRejected, interviewLang]
+    [
+      clearAutoListenTimeout,
+      submitAnswerText,
+      displayQuestion,
+      state?.turns,
+      handleMicCaptureRejected,
+      interviewLang,
+      voiceEnabled,
+      humanVoice,
+      interviewerFirstNameEarly,
+    ]
   );
 
   const handleSubmitAnswer = () => {
@@ -1080,10 +1136,14 @@ export default function LiveInterviewPage() {
     ?? [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
   const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
   const currentQuestion = displayQuestion || 'Getting your interview ready…';
-  const panelLabel =
-    voicePhase === 'speaking' && introSpeaking ? 'Introduction' : 'Current question';
+  const panelLabel = interviewerCaption
+    ? 'Interviewer'
+    : voicePhase === 'speaking' && introSpeaking
+      ? 'Introduction'
+      : 'Current question';
   const panelText =
-    voicePhase === 'speaking' && liveCaption ? liveCaption : currentQuestion;
+    interviewerCaption ||
+    (voicePhase === 'speaking' && liveCaption ? liveCaption : currentQuestion);
   const codingTurnActive = Boolean(
     lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
   );
@@ -1131,15 +1191,14 @@ export default function LiveInterviewPage() {
         setMicOn(false);
         setVoicePhase('thinking');
         setError('');
-        if (!userMutedRef.current && voiceEnabled && roomPhase === 'live' && !ackSpokenRef.current) {
-          ackSpokenRef.current = true;
-          void speakInterviewerText(instantAckPhrase(interviewLang), {
-            lang: interviewLang,
-            persona: interviewerPersona,
-          });
+        pipelineBusyRef.current = true;
+        if (voiceEnabled && roomPhase === 'live') {
+          void humanVoice.speakLine(instantAckPhrase(interviewLang));
         }
       }}
       onTranscriptionError={(msg) => {
+        pipelineBusyRef.current = false;
+        cancelHumanSpeechRef.current();
         autoListeningRef.current = false;
         clearAutoListenTimeout();
         setMicOn(false);
@@ -1614,6 +1673,7 @@ export default function LiveInterviewPage() {
               phase={voiceStatusPhase}
               micOn={micOn}
               detail={voiceStatusDetail}
+              statusLabel={humanStatusText}
             />
             {error && (
               <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>

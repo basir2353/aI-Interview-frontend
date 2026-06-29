@@ -90,7 +90,7 @@ export function stopServerTtsPlayback(): void {
 
 export async function playServerTtsAudio(
   buffer: ArrayBuffer,
-  options?: { onStart?: () => void; onEnd?: () => void }
+  options?: { onStart?: () => void; onEnd?: () => void; /** Filler/ack lines — do not open mic after playback. */ engagement?: boolean }
 ): Promise<void> {
   stopServerTtsPlayback();
   const blob = new Blob([buffer], { type: 'audio/mpeg' });
@@ -100,6 +100,7 @@ export async function playServerTtsAudio(
   audio.preload = 'auto';
   audio.playbackRate = CLOUD_TTS_PLAYBACK_RATE;
   activeAudio = audio;
+  const engagement = options?.engagement === true;
 
   return new Promise<void>((resolve, reject) => {
     let settled = false;
@@ -118,7 +119,7 @@ export async function playServerTtsAudio(
     };
 
     audio.onplay = () => {
-      setInterviewerSpeaking(true);
+      if (!engagement) setInterviewerSpeaking(true);
       options?.onStart?.();
     };
     audio.onended = done;
@@ -130,7 +131,12 @@ export async function playServerTtsAudio(
 export async function speakViaServerTts(
   text: string,
   language: InterviewLanguageCode | string,
-  options?: { onStart?: () => void; onEnd?: () => void; persona?: InterviewerPersona | string }
+  options?: {
+    onStart?: () => void;
+    onEnd?: () => void;
+    persona?: InterviewerPersona | string;
+    engagement?: boolean;
+  }
 ): Promise<void> {
   const buffer = await fetchServerTtsAudio(text, language, options?.persona);
   await playServerTtsAudio(buffer, options);
