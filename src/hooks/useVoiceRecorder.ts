@@ -30,7 +30,7 @@ export interface UseVoiceRecorderOptions {
   /** Called for any fatal error (permission, conversion, backend). */
   onError?: (message: string, details?: unknown) => void;
   /** Called when recording stops and upload/transcription begins. */
-  onProcessing?: () => void;
+  onProcessing?: (info: { hadSpeech: boolean; speechMs: number }) => void;
   /** Interview language for STT (ISO 639-1: ur, ar, en). */
   transcribeLanguage?: string;
   /** Allow Arabic+English / Urdu+English code-switching on the server. */
@@ -312,8 +312,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
       processingRef.current = true;
       setStatus('processing');
-      onProcessing?.();
-      console.log('[useVoiceRecorder] Recording stopped, processing audio');
+      const hadSpeech = speechSeenRef.current && speechTotalMsRef.current >= minSpeechMsForTranscribe;
+      onProcessing?.({ hadSpeech, speechMs: speechTotalMsRef.current });
+      console.log('[useVoiceRecorder] Recording stopped, processing audio', { hadSpeech, speechMs: speechTotalMsRef.current });
 
       const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
       console.log('[useVoiceRecorder] Raw blob size:', rawBlob.size);
@@ -321,26 +322,31 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       const recordedMs = Date.now() - startedAtRef.current;
       const speechMs = speechTotalMsRef.current;
 
-      // Manual push-to-talk: user clicked stop — always send audio to STT (VAD often misses quiet mics).
-      const manualStop = !autoStopOnSilence;
-      const substantialClip = rawBlob.size >= 48000 || recordedMs >= 2000;
-
-      if (
-        autoStopOnSilence &&
-        !manualStop &&
-        (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) &&
-        !substantialClip
-      ) {
-        const msg = 'No audio detected (no speech)';
-        processingRef.current = false;
-        setStatus('error');
-        setError(msg);
-        onError?.(msg);
-        cleanupRecorderOnly();
-        return;
+      // Auto-interview mode: never transcribe without real VAD speech (blocks TTS speaker echo).
+      if (autoStopOnSilence) {
+        if (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) {
+          const msg = 'No audio detected (no speech)';
+          processingRef.current = false;
+          setStatus('error');
+          setError(msg);
+          onError?.(msg);
+          cleanupRecorderOnly();
+          return;
+        }
+      } else {
+        const substantialClip = rawBlob.size >= 48000 || recordedMs >= 2000;
+        if ((!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) && !substantialClip) {
+          const msg = 'No audio detected (no speech)';
+          processingRef.current = false;
+          setStatus('error');
+          setError(msg);
+          onError?.(msg);
+          cleanupRecorderOnly();
+          return;
+        }
       }
 
-      if (recordedMs < minTranscribeMs && !substantialClip) {
+      if (recordedMs < minTranscribeMs && speechMs < minSpeechMsForTranscribe) {
         const msg = 'No audio detected (recording too short)';
         processingRef.current = false;
         setStatus('error');

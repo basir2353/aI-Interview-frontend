@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { speakInterviewerText, cancelInterviewerSpeech } from '@/lib/interviewerSpeech';
-import { spokenBridgePhrase } from '@/lib/interviewEngagement';
 import type { InterviewerPersona } from '@/types';
 
 interface Options {
@@ -55,18 +54,9 @@ export function useInterviewHumanVoice({
   useEffect(() => {
     if (!pipelineWaiting) {
       bridgeSpokenRef.current = false;
-      return;
     }
-    if (!loading || !voiceEnabled) return;
-
-    const timer = window.setTimeout(() => {
-      if (bridgeSpokenRef.current || !loading) return;
-      bridgeSpokenRef.current = true;
-      void speakLine(spokenBridgePhrase(interviewLang, interviewerFirstName));
-    }, 4200);
-
-    return () => window.clearTimeout(timer);
-  }, [pipelineWaiting, loading, voiceEnabled, interviewLang, interviewerFirstName, speakLine]);
+    // Bridge TTS disabled — spoken filler was picked up by the mic as fake answers.
+  }, [pipelineWaiting]);
 
   return { speakLine, cancelHumanSpeech };
 }

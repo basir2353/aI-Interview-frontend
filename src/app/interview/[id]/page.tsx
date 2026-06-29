@@ -20,8 +20,8 @@ import {
 } from '@/lib/ttsConfig';
 import { useInterviewEngagement } from '@/hooks/useInterviewEngagement';
 import { useInterviewHumanVoice } from '@/hooks/useInterviewHumanVoice';
-import { humanStatusLabel, instantAckPhrase, reflectiveAckPhrase } from '@/lib/interviewEngagement';
-import { isLikelyInterviewerEcho } from '@/lib/echoGuard';
+import { humanStatusLabel } from '@/lib/interviewEngagement';
+import { isLikelyInterviewerEcho, collectInterviewerTexts } from '@/lib/echoGuard';
 import { isInvalidCandidateTranscript } from '@/lib/sttGuard';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
@@ -118,6 +118,8 @@ export default function LiveInterviewPage() {
   const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
   const [interviewerCaption, setInterviewerCaption] = useState('');
   const cancelHumanSpeechRef = useRef<() => void>(() => {});
+  const lastClipHadSpeechRef = useRef(false);
+  const userInitiatedMicRef = useRef(false);
   const interviewerSpeakingRef = useRef(false);
   const loadingRef = useRef(false);
   const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
@@ -186,7 +188,9 @@ export default function LiveInterviewPage() {
     if (audioRecorderRef.current?.listening) return;
     if (Date.now() < micEligibleAfterRef.current) return;
     clearAutoListenTimeout();
+    audioRecorderRef.current?.cancel();
     autoListeningRef.current = true;
+    userInitiatedMicRef.current = false;
 
     const tryStartMic = async (attempt = 0) => {
       if (!autoListeningRef.current || userMutedRef.current) return;
@@ -215,9 +219,10 @@ export default function LiveInterviewPage() {
 
     void tryStartMic();
 
-    const listenWindowMs = 125000;
+    const listenWindowMs = 90000;
     autoListenTimeoutRef.current = setTimeout(() => {
-      audioRecorderRef.current?.stop();
+      autoListeningRef.current = false;
+      audioRecorderRef.current?.cancel();
       clearAutoListenTimeout();
     }, listenWindowMs);
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
@@ -319,6 +324,7 @@ export default function LiveInterviewPage() {
   const { stopSpeaking, markTurnSpoken } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
     onSpeakText: handleAiSpeakText,
     onAutoSpeakStart: () => {
+      micEligibleAfterRef.current = Date.now() + 120_000;
       cancelHumanSpeechRef.current();
       clearAutoListenTimeout();
       autoListeningRef.current = false;
@@ -593,13 +599,18 @@ export default function LiveInterviewPage() {
         return;
       }
 
-      const lastAiText =
-        displayQuestion.trim() ||
-        [...(state?.turns ?? [])]
-          .reverse()
-          .find((t) => t.role === 'ai' && !t.isIntro)?.content ||
-        '';
-      if (isLikelyInterviewerEcho(cleaned, lastAiText, interviewLang) || isInvalidCandidateTranscript(cleaned, interviewLang)) {
+      if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current) {
+        console.warn('[Interview] Ignoring transcript — no VAD speech detected (likely TTS echo)');
+        pipelineBusyRef.current = false;
+        handleMicCaptureRejected('That did not sound like a real answer.');
+        return;
+      }
+
+      const interviewerTexts = collectInterviewerTexts(state?.turns, [
+        displayQuestion,
+        interviewerCaption,
+      ]);
+      if (isLikelyInterviewerEcho(cleaned, interviewerTexts, interviewLang) || isInvalidCandidateTranscript(cleaned, interviewLang)) {
         console.warn('[Interview] Ignoring invalid or hallucinated transcript', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
@@ -622,24 +633,16 @@ export default function LiveInterviewPage() {
         countdownIntervalRef.current = null;
       }
 
-      if (voiceEnabled) {
-        humanVoice.cancelHumanSpeech();
-        void humanVoice.speakLine(
-          reflectiveAckPhrase(cleaned, interviewLang, interviewerFirstNameEarly)
-        );
-      }
       void submitAnswerText(cleaned);
     },
     [
       clearAutoListenTimeout,
       submitAnswerText,
       displayQuestion,
+      interviewerCaption,
       state?.turns,
       handleMicCaptureRejected,
       interviewLang,
-      voiceEnabled,
-      humanVoice,
-      interviewerFirstNameEarly,
     ]
   );
 
@@ -706,6 +709,7 @@ export default function LiveInterviewPage() {
     }
     userMutedRef.current = false;
     noSpeechRetryRef.current = 0;
+    userInitiatedMicRef.current = true;
     if (loading || pipelineBusyRef.current) return;
     startAutoListeningWindow();
   };
@@ -1187,14 +1191,12 @@ export default function LiveInterviewPage() {
       transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
       transcribeMixed={sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang))}
       onTranscript={handleVoiceTranscript}
-      onProcessing={() => {
+      onProcessing={(info) => {
+        lastClipHadSpeechRef.current = info.hadSpeech;
         setMicOn(false);
         setVoicePhase('thinking');
         setError('');
         pipelineBusyRef.current = true;
-        if (voiceEnabled && roomPhase === 'live') {
-          void humanVoice.speakLine(instantAckPhrase(interviewLang));
-        }
       }}
       onTranscriptionError={(msg) => {
         pipelineBusyRef.current = false;
@@ -1213,11 +1215,12 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Tap the mic icon to try again.'
         );
       }}
-      silenceMs={2200}
-      minRecordMs={1000}
-      minSpeechMs={600}
-      minTranscribeMs={1000}
-      minSpeechMsForTranscribe={600}
+      silenceMs={2400}
+      minRecordMs={1200}
+      minSpeechMs={800}
+      minTranscribeMs={1200}
+      minSpeechMsForTranscribe={1000}
+      disableAdaptiveVad
       autoStopOnSilence
       stopDelayMs={400}
       maxRecordMs={120000}

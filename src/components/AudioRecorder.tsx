@@ -19,7 +19,7 @@ export interface AudioRecorderHandle {
 interface AudioRecorderProps {
   onTranscript: (text: string) => void;
   onNoSpeech?: () => void;
-  onProcessing?: () => void;
+  onProcessing?: (info: { hadSpeech: boolean; speechMs: number }) => void;
   onTranscriptionError?: (message: string) => void;
   disabled?: boolean;
   autoStart?: boolean;
@@ -94,8 +94,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     onTranscript: (text) => {
       onTranscript(text);
     },
-    onProcessing: () => {
-      onProcessing?.();
+    onProcessing: (info) => {
+      onProcessing?.(info);
     },
     onError: (message, details) => {
       if (isNoSpeechError(message)) {
