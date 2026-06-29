@@ -89,16 +89,33 @@ export function useInterviewerVoice(
     if (!fullText) return;
 
     let cancelled = false;
+    let speakStarted = false;
     const timer = setTimeout(() => {
       if (cancelled) return;
-      void speakTurn(fullText, lastAiTurn.id);
+      void speakInterviewerText(fullText, {
+        lang,
+        persona,
+        onStart: () => {
+          if (cancelled) return;
+          speakStarted = true;
+          lastSpokenTurnId.current = lastAiTurn.id;
+          onSpeakTextRef.current?.(fullText, lastAiTurn.id);
+          onAutoSpeakStartRef.current?.();
+        },
+        onEnd: () => {
+          if (cancelled && !speakStarted) return;
+          onAutoSpeakEndRef.current?.();
+        },
+      }).catch(() => {
+        if (!cancelled) onAutoSpeakEndRef.current?.();
+      });
     }, TTS_TURN_START_DELAY_MS);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [turns, voiceEnabled, stopSpeaking, skipTurnIds, speakTurn]);
+  }, [turns, voiceEnabled, stopSpeaking, skipTurnIds, lang, persona]);
 
   return { stopSpeaking, speakText, speakTurn, markTurnSpoken };
 }

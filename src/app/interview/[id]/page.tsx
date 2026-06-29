@@ -109,6 +109,11 @@ export default function LiveInterviewPage() {
   const endedByUnloadRef = useRef(false);
   const introPipelineRanRef = useRef(false);
   const loadingRef = useRef(false);
+  const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
+
+  useEffect(() => {
+    voicePhaseRef.current = voicePhase;
+  }, [voicePhase]);
 
   useEffect(() => {
     if (roomPhase !== 'live') {
@@ -239,7 +244,8 @@ export default function LiveInterviewPage() {
       userMutedRef.current = false;
       setLiveCaption('');
       setTimeout(() => {
-        if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current) return;
+        if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current || userMutedRef.current) return;
+        if (voicePhaseRef.current === 'speaking') return;
         startAutoListeningWindow();
       }, TTS_AFTER_SPEAK_MIC_DELAY_MS);
     },
@@ -1017,12 +1023,7 @@ export default function LiveInterviewPage() {
           setVoicePhase((prev) => (prev === 'listening' || prev === 'transcribing' ? 'idle' : prev));
           return;
         }
-        if (voicePhase === 'speaking') {
-          return;
-        }
-        if (autoListeningRef.current) {
-          setVoicePhase((prev) => (prev === 'listening' ? 'transcribing' : prev));
-        }
+        setVoicePhase((prev) => (prev === 'listening' ? 'transcribing' : prev));
       }}
       hideButton
     />
