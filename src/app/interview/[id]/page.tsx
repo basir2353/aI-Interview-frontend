@@ -12,7 +12,7 @@ import { CodeEditor } from '@/components/CodeEditor';
 import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
-import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
+import { speakInterviewerText, primeInterviewAudio, subscribeInterviewerSpeaking } from '@/lib/interviewerSpeech';
 import {
   TTS_AFTER_SPEAK_MIC_DELAY_MS,
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
@@ -111,6 +111,7 @@ export default function LiveInterviewPage() {
   const introPlaybackActiveRef = useRef(false);
   const introCompleteRef = useRef(false);
   const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
+  const interviewerSpeakingRef = useRef(false);
   const loadingRef = useRef(false);
   const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
 
@@ -154,6 +155,18 @@ export default function LiveInterviewPage() {
     }
   }, []);
 
+  useEffect(() => {
+    return subscribeInterviewerSpeaking((speaking) => {
+      interviewerSpeakingRef.current = speaking;
+      if (!speaking) return;
+      clearAutoListenTimeout();
+      autoListeningRef.current = false;
+      audioRecorderRef.current?.cancel();
+      setMicOn(false);
+      setVoicePhase('speaking');
+    });
+  }, [clearAutoListenTimeout]);
+
   const startAutoListeningWindow = useCallback(() => {
     const latestAi = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
     const isCodingTurn = Boolean(
@@ -161,6 +174,8 @@ export default function LiveInterviewPage() {
     );
     if (!voiceEnabled || loading || pipelineBusyRef.current || isCodingTurn) return;
     if (userMutedRef.current) return;
+    if (introPlaybackActiveRef.current || interviewerSpeakingRef.current) return;
+    if (voicePhaseRef.current === 'speaking') return;
     if (audioRecorderRef.current?.busy) return;
     if (audioRecorderRef.current?.listening) return;
     clearAutoListenTimeout();
@@ -277,7 +292,7 @@ export default function LiveInterviewPage() {
   }, []);
 
   const voiceStatusPhase: VoicePipelinePhase =
-    loading ? 'thinking' : voicePhase === 'listening' && !micOn ? 'idle' : voicePhase;
+    loading ? 'thinking' : introSpeaking ? 'speaking' : voicePhase === 'listening' && !micOn ? 'idle' : voicePhase;
   const voiceStatusDetail =
     loading && answerText
       ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
@@ -515,12 +530,15 @@ export default function LiveInterviewPage() {
   const handleMicToggle = () => {
     clearAutoListenTimeout();
     const recorder = audioRecorderRef.current;
+    if (recorder?.listening) {
+      autoListeningRef.current = false;
+      recorder.stop();
+      return;
+    }
     const micActive =
       micOn ||
-      voicePhase === 'listening' ||
       voicePhase === 'transcribing' ||
       autoListeningRef.current ||
-      recorder?.listening ||
       recorder?.busy;
     if (micActive) {
       userMutedRef.current = true;
@@ -617,33 +635,11 @@ export default function LiveInterviewPage() {
 
   useEffect(() => {
     if (roomPhase !== 'instructions' || !id) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const liveState = await api.getState(id);
-        if (cancelled || !liveState) return;
-        const needsWelcome =
-          !liveState.welcomeDelivered ||
-          !liveState.turns.some((t) => t.role === 'ai' && t.isIntro);
-        if (needsWelcome) {
-          const res = await api.beginLiveInterview(id);
-          if (!cancelled) prefetchedLiveStateRef.current = res.state;
-        } else {
-          prefetchedLiveStateRef.current = liveState;
-        }
-      } catch {
-        // live entry will retry
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [roomPhase, id]);
-
-  useEffect(() => {
-    if (roomPhase !== 'instructions') return;
     void audioRecorderRef.current?.warmUp?.();
-  }, [roomPhase]);
+    void api.getState(id).then((s) => {
+      prefetchedLiveStateRef.current = s;
+    }).catch(() => undefined);
+  }, [roomPhase, id]);
 
   useEffect(() => {
     if (roomPhase !== 'live') {
@@ -695,7 +691,13 @@ export default function LiveInterviewPage() {
       }
       userMutedRef.current = false;
       if (questionTurnId) markTurnSpokenRef.current(questionTurnId);
-      startAutoListeningWindowRef.current();
+      if (typeof window !== 'undefined' && id) {
+        window.sessionStorage.setItem(`intervion_intro_spoken_${id}`, '1');
+      }
+      window.setTimeout(() => {
+        if (cancelled || interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
+        startAutoListeningWindowRef.current();
+      }, TTS_AFTER_SPEAK_MIC_DELAY_MS + 350);
     };
 
     const resumeLiveSession = (liveState: InterviewState) => {
@@ -733,13 +735,9 @@ export default function LiveInterviewPage() {
         return;
       }
 
-      const fullSpeech = [introText, questionText].filter(Boolean).join(' ');
-
-      try {
-        setIntroSpeaking(true);
-        setLiveCaption(introText || 'Welcome');
-        setDisplayQuestion('');
-        await speakInterviewerText(fullSpeech, {
+      const speakBlock = async (text: string, duringIntro: boolean) => {
+        if (!text.trim()) return;
+        await speakInterviewerText(text, {
           lang: interviewLang,
           persona: interviewerPersona,
           onStart: () => {
@@ -748,13 +746,30 @@ export default function LiveInterviewPage() {
             audioRecorderRef.current?.cancel();
             setMicOn(false);
             setVoicePhase('speaking');
-            setIntroSpeaking(true);
+            setIntroSpeaking(duringIntro);
+            if (duringIntro) {
+              setLiveCaption(text);
+              setDisplayQuestion('');
+            } else {
+              setLiveCaption('');
+              setDisplayQuestion(text);
+            }
           },
         });
-        if (cancelled) return;
-        if (questionText) {
-          setDisplayQuestion(questionText);
+      };
+
+      try {
+        if (introText) {
+          await speakBlock(introText, true);
+          if (cancelled) return;
+          if (questionText) {
+            await new Promise((r) => window.setTimeout(r, TTS_INTRO_TO_QUESTION_PAUSE_MS));
+          }
         }
+        if (questionText) {
+          await speakBlock(questionText, false);
+        }
+        if (cancelled) return;
         finishIntroAndOpenMic(questionTurn?.id, questionText);
       } catch (e) {
         console.error('[Intro] Speech pipeline error', e);
@@ -799,8 +814,11 @@ export default function LiveInterviewPage() {
           liveState.welcomeDelivered &&
           liveState.turns.some((t) => t.role === 'ai' && t.isIntro) &&
           liveState.turns.some((t) => t.role === 'ai' && !t.isIntro);
+        const introAlreadySpokenLocally =
+          typeof window !== 'undefined' &&
+          window.sessionStorage.getItem(`intervion_intro_spoken_${id}`) === '1';
 
-        if (welcomeAlreadyComplete && !needsWelcome) {
+        if (welcomeAlreadyComplete && !needsWelcome && introAlreadySpokenLocally) {
           resumeLiveSession(liveState);
           return;
         }
@@ -1028,9 +1046,9 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={3000}
-      minRecordMs={900}
-      minSpeechMs={500}
+      silenceMs={2500}
+      minRecordMs={700}
+      minSpeechMs={350}
       stopDelayMs={400}
       maxRecordMs={120000}
       onNoSpeech={() => {
@@ -1039,7 +1057,7 @@ export default function LiveInterviewPage() {
           autoListeningRef.current = false;
           setVoicePhase('idle');
           setMicOn(false);
-          setError('I could not hear your answer clearly. Please speak a little louder or click the mic to try again.');
+          setError('I could not hear your answer clearly. Speak louder, then click the mic button when you finish your answer.');
           return;
         }
         noSpeechRetryRef.current += 1;

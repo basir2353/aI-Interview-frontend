@@ -97,6 +97,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const speechTotalMsRef = useRef<number>(0);
   const noiseFloorRef = useRef<number>(0.008);
   const calibrateUntilRef = useRef<number>(0);
+  const noSpeechWatchdogRef = useRef<number | null>(null);
   const VAD_INTERVAL_MS = 160;
 
   const clearVad = useCallback(() => {
@@ -113,6 +114,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       window.clearTimeout(pendingStopTimeoutRef.current);
       pendingStopTimeoutRef.current = null;
     }
+    if (noSpeechWatchdogRef.current) {
+      window.clearTimeout(noSpeechWatchdogRef.current);
+      noSpeechWatchdogRef.current = null;
+    }
   }, []);
 
   const clearMaxStop = useCallback(() => {
@@ -124,7 +129,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
   const audioConstraints: MediaTrackConstraints = {
     echoCancellation: true,
-    noiseSuppression: false,
+    noiseSuppression: true,
     autoGainControl: true,
     channelCount: 1,
   };
@@ -252,7 +257,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     silenceSinceRef.current = null;
     speechSeenRef.current = false;
     noiseFloorRef.current = 0.008;
-    calibrateUntilRef.current = Date.now() + 500;
+    calibrateUntilRef.current = Date.now() + 1000;
 
     const mimeType = pickBestRecorderMimeType();
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -274,6 +279,12 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     recorder.onstart = () => {
       setStatus('recording');
       console.log('[useVoiceRecorder] Recording started', { mimeType: recorder.mimeType });
+      noSpeechWatchdogRef.current = window.setTimeout(() => {
+        if (!speechSeenRef.current && recorderRef.current?.state === 'recording') {
+          console.warn('[useVoiceRecorder] No speech detected yet — lowering VAD sensitivity');
+          noiseFloorRef.current = Math.max(0.002, noiseFloorRef.current * 0.6);
+        }
+      }, 12000);
     };
 
     recorder.onstop = async () => {
@@ -392,10 +403,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           }
 
           // Dynamic threshold: scale from noise floor, with sane bounds.
-          const floor = Math.max(0.0035, Math.min(0.05, noiseFloorRef.current));
-          const thresholdRms = Math.max(0.0045, floor * 3.0 + 0.0015);
-          const thresholdPeak = Math.max(0.03, thresholdRms * 3.5);
-          const isSpeech = rms > thresholdRms * 1.15 || peak > thresholdPeak;
+          const floor = Math.max(0.0025, Math.min(0.05, noiseFloorRef.current));
+          const thresholdRms = Math.max(0.0035, floor * 2.2 + 0.0012);
+          const thresholdPeak = Math.max(0.022, thresholdRms * 3.0);
+          const isSpeech = rms > thresholdRms || peak > thresholdPeak;
           // Count as silence when quiet so recording stops soon after user finishes speaking
           const isSilent = rms < thresholdRms * 0.7 && peak < thresholdPeak * 0.7;
 
