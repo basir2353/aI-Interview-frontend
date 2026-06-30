@@ -133,6 +133,16 @@ export default function LiveInterviewPage() {
   /** Do not open mic until this timestamp (prevents TTS speaker echo auto-submit). */
   const micEligibleAfterRef = useRef(0);
   const autoListenScheduleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interviewLangRef = useRef(interviewLang);
+  const interviewerPersonaRef = useRef<InterviewerPersona>(interviewerPersona);
+
+  useEffect(() => {
+    interviewLangRef.current = interviewLang;
+  }, [interviewLang]);
+
+  useEffect(() => {
+    interviewerPersonaRef.current = interviewerPersona;
+  }, [interviewerPersona]);
 
   useEffect(() => {
     voicePhaseRef.current = voicePhase;
@@ -256,7 +266,7 @@ export default function LiveInterviewPage() {
 
   /** After AI finishes speaking, open the mic for the candidate's turn. */
   const scheduleAutoListen = useCallback((opts?: { skipTtsDelay?: boolean }) => {
-    if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
+    if (userMutedRef.current) return;
     if (!opts?.skipTtsDelay) {
       markMicEligibleAfterTts();
     } else {
@@ -264,14 +274,35 @@ export default function LiveInterviewPage() {
     }
     clearAutoListenTimeout();
     setAutoMicPending(true);
-    const waitMs = Math.max(0, micEligibleAfterRef.current - Date.now());
-    autoListenScheduleRef.current = setTimeout(() => {
+
+    const attemptOpenMic = (tryCount = 0) => {
+      if (userMutedRef.current) {
+        setAutoMicPending(false);
+        return;
+      }
+      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
+        if (tryCount < 80) {
+          autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(tryCount + 1), 300);
+        } else {
+          setAutoMicPending(false);
+        }
+        return;
+      }
+      if (loadingRef.current || pipelineBusyRef.current) {
+        if (tryCount < 80) {
+          autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(tryCount + 1), 400);
+        } else {
+          setAutoMicPending(false);
+        }
+        return;
+      }
       autoListenScheduleRef.current = null;
-      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
-      if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
       void audioRecorderRef.current?.warmUp?.();
       startAutoListeningWindow();
-    }, waitMs);
+    };
+
+    const waitMs = Math.max(0, micEligibleAfterRef.current - Date.now());
+    autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(0), waitMs);
   }, [clearAutoListenTimeout, markMicEligibleAfterTts, startAutoListeningWindow]);
 
   const handleMicCaptureRejected = useCallback(
@@ -325,7 +356,7 @@ export default function LiveInterviewPage() {
       if (submitInFlightRef.current) return;
       if (voicePhaseRef.current === 'thinking' || voicePhaseRef.current === 'transcribing') return;
       if (!voiceEnabled || userMutedRef.current) return;
-      scheduleAutoListen();
+      scheduleAutoListen({ skipTtsDelay: introCompleteRef.current });
     });
   }, [clearAutoListenTimeout, voiceEnabled, scheduleAutoListen]);
 
@@ -562,16 +593,17 @@ export default function LiveInterviewPage() {
     }
   }, [state, loading, voiceEnabled, startAutoListeningWindow]);
 
-  /** Safety net: if AI finished but mic never opened, retry auto-listen once. */
+  /** Safety net: if AI finished but mic never opened, retry auto-listen. */
   useEffect(() => {
-    if (roomPhase !== 'live' || !introComplete || !voiceEnabled || micOn || autoMicPending) return;
+    if (roomPhase !== 'live' || !voiceEnabled || micOn || autoMicPending) return;
     if (loading || introSpeaking || pipelineWaiting) return;
+    if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
     const lastAiTurn =
       [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro) ??
       [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
-    if (!lastAiTurn) return;
+    if (!lastAiTurn && !displayQuestion.trim()) return;
     const isCodingTurn = Boolean(
-      lastAiTurn.isCodingQuestion || lastAiTurn.codingStarterCode || lastAiTurn.codingLanguage
+      lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
     );
     if (isCodingTurn || userMutedRef.current) return;
 
@@ -582,13 +614,13 @@ export default function LiveInterviewPage() {
     return () => window.clearTimeout(timer);
   }, [
     roomPhase,
-    introComplete,
     voiceEnabled,
     micOn,
     autoMicPending,
     loading,
     introSpeaking,
     pipelineWaiting,
+    displayQuestion,
     state?.turns,
     scheduleAutoListen,
   ]);
@@ -916,16 +948,42 @@ export default function LiveInterviewPage() {
   }, [screenStream]);
 
   // Live room: deliver welcome once, speak all intro beats + Q1, then open mic.
-  // Do NOT list `state` in deps — setState during begin-live must not cancel this pipeline.
+  // Do NOT list `state`, interviewLang, or persona in deps — setState during begin-live must not cancel this pipeline.
   useEffect(() => {
     if (roomPhase !== 'live' || !liveScreenReady || report || typeof window === 'undefined') return;
-    if (introPipelineRanRef.current) return;
+
+    const recoverMicAfterCancelledIntro = () => {
+      if (introCompleteRef.current) return;
+      introPlaybackActiveRef.current = false;
+      introCompleteRef.current = true;
+      setIntroComplete(true);
+      setIntroSpeaking(false);
+      setLiveCaption('');
+      voicePhaseRef.current = 'idle';
+      setVoicePhase('idle');
+      userMutedRef.current = false;
+      scheduleAutoListenRef.current({ skipTtsDelay: true });
+    };
+
+    if (introPipelineRanRef.current) {
+      if (
+        !introCompleteRef.current &&
+        !introPlaybackActiveRef.current &&
+        !interviewerSpeakingRef.current
+      ) {
+        recoverMicAfterCancelledIntro();
+      }
+      return;
+    }
     introPipelineRanRef.current = true;
 
     let cancelled = false;
 
     const finishIntroAndOpenMic = (questionTurnId?: string, questionText?: string) => {
-      if (cancelled) return;
+      if (introCompleteRef.current) {
+        scheduleAutoListenRef.current({ skipTtsDelay: true });
+        return;
+      }
       introPlaybackActiveRef.current = false;
       introCompleteRef.current = true;
       setIntroComplete(true);
@@ -983,8 +1041,8 @@ export default function LiveInterviewPage() {
       const speakBlock = async (text: string, duringIntro: boolean) => {
         if (!text.trim()) return;
         await speakInterviewerText(text, {
-          lang: interviewLang,
-          persona: interviewerPersona,
+          lang: interviewLangRef.current,
+          persona: interviewerPersonaRef.current,
           onStart: () => {
             clearAutoListenTimeoutRef.current();
             autoListeningRef.current = false;
@@ -1014,12 +1072,13 @@ export default function LiveInterviewPage() {
         if (questionText) {
           await speakBlock(questionText, false);
         }
-        if (cancelled) return;
-        finishIntroAndOpenMic(questionTurn?.id, questionText);
       } catch (e) {
         console.error('[Intro] Speech pipeline error', e);
         if (questionText) setDisplayQuestion(questionText);
-        finishIntroAndOpenMic(questionTurn?.id, questionText);
+      } finally {
+        if (!introCompleteRef.current) {
+          finishIntroAndOpenMic(questionTurn?.id, questionText);
+        }
       }
     };
 
@@ -1081,7 +1140,7 @@ export default function LiveInterviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomPhase, liveScreenReady, report, id, interviewLang, interviewerPersona]);
+  }, [roomPhase, liveScreenReady, report, id]);
 
   useEffect(() => {
     return () => {
