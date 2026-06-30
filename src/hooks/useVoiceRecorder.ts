@@ -426,8 +426,15 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         const trimStartSec = Math.max(0, ((firstSpeechAtMsRef.current ?? 0) - 350) / 1000);
         const trimEndSec =
           ((lastSpeechAtMsRef.current ?? recordedMs) + silenceMs + stopDelayMs + 200) / 1000;
+        const useTrim =
+          firstSpeechAtMsRef.current != null &&
+          lastSpeechAtMsRef.current != null &&
+          trimEndSec > trimStartSec + 0.25;
         try {
-          uploadBlob = await encodeBlobTo16kMonoWav(rawBlob, { trimStartSec, trimEndSec });
+          uploadBlob = await encodeBlobTo16kMonoWav(
+            rawBlob,
+            useTrim ? { trimStartSec, trimEndSec } : undefined
+          );
           uploadName = 'recording.wav';
           console.log('[useVoiceRecorder] Encoded trimmed WAV size:', uploadBlob.size, {
             trimStartSec: trimStartSec.toFixed(2),
