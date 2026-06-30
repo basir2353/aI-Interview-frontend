@@ -1098,10 +1098,10 @@ export default function LiveInterviewPage() {
       onProcessing={onProcessing}
       onTranscriptionError={onTranscriptionError}
       silenceMs={INTERVIEW_SILENCE_AUTO_STOP_MS}
-      minRecordMs={600}
-      minSpeechMs={300}
-      minTranscribeMs={700}
-      minSpeechMsForTranscribe={400}
+      minRecordMs={500}
+      minSpeechMs={200}
+      minTranscribeMs={600}
+      minSpeechMsForTranscribe={250}
       disableAdaptiveVad={false}
       autoStopOnSilence
       stopDelayMs={350}

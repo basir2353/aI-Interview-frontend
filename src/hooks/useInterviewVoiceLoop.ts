@@ -164,7 +164,7 @@ export function useInterviewVoiceLoop({
         listenWindowRef.current = setTimeout(() => {
           if (autoListeningRef.current) {
             autoListeningRef.current = false;
-            audioRecorderRef.current?.cancel();
+            audioRecorderRef.current?.stop();
             setMicOn(false);
           }
         }, 90000);
@@ -227,11 +227,18 @@ export function useInterviewVoiceLoop({
   );
 
   const onInterviewerSpeakStart = useCallback(() => {
-    closeMic(true);
+    clearTimers();
+    const recorder = audioRecorderRef.current;
+    if (recorder?.listening) {
+      autoListeningRef.current = false;
+      recorder.stop();
+    } else {
+      closeMic(true);
+    }
     setVoicePhase('speaking');
     phaseRef.current = 'speaking';
     noSpeechRetryRef.current = 0;
-  }, [closeMic]);
+  }, [audioRecorderRef, clearTimers, closeMic]);
 
   const onInterviewerSpeakEnd = useCallback(() => {
     if (introPlaybackActiveRef.current) return;
@@ -376,8 +383,8 @@ export function useInterviewVoiceLoop({
 
   const onNoSpeech = useCallback(
     (wasIdleStop: boolean) => {
-      if (!autoListeningRef.current && !wasIdleStop) return;
-      if (!voiceEnabledRef.current || userMutedRef.current) return;
+      if (userMutedRef.current && !wasIdleStop) return;
+      if (!voiceEnabledRef.current && !wasIdleStop) return;
       onCaptureRejected(
         wasIdleStop
           ? interviewLang === 'ur'

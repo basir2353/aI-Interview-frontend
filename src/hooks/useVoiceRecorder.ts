@@ -120,7 +120,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const postSpeechSilenceTimeoutRef = useRef<number | null>(null);
   const VAD_INTERVAL_MS = 160;
   /** Consecutive VAD speech frames required before resetting the silence countdown. */
-  const SPEECH_STREAK_FRAMES = 3;
+  const SPEECH_STREAK_FRAMES = 2;
 
   const clearPostSpeechSilenceStop = useCallback(() => {
     if (postSpeechSilenceTimeoutRef.current) {
@@ -246,16 +246,22 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const stop = useCallback(() => {
     skipTranscribeRef.current = false;
     const rec = recorderRef.current;
-    if (!rec) return;
-    if (rec.state !== 'inactive') {
-      try {
-        rec.requestData();
-      } catch {
-        // ignore
-      }
-      rec.stop();
+    if (!rec || rec.state === 'inactive') return;
+    if (!processingRef.current) {
+      processingRef.current = true;
+      setStatus('processing');
+      onProcessing?.({
+        hadSpeech: speechSeenRef.current,
+        speechMs: speechTotalMsRef.current,
+      });
     }
-  }, []);
+    try {
+      rec.requestData();
+    } catch {
+      // ignore
+    }
+    rec.stop();
+  }, [onProcessing]);
 
   const cancel = useCallback(() => {
     skipTranscribeRef.current = true;
@@ -364,21 +370,28 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         return;
       }
 
-      processingRef.current = true;
-      setStatus('processing');
       const hadSpeech = speechSeenRef.current && speechTotalMsRef.current >= minSpeechMsForTranscribe;
-      onProcessing?.({ hadSpeech, speechMs: speechTotalMsRef.current });
-      console.log('[useVoiceRecorder] Recording stopped, processing audio', { hadSpeech, speechMs: speechTotalMsRef.current });
+      if (!processingRef.current) {
+        processingRef.current = true;
+        setStatus('processing');
+        onProcessing?.({ hadSpeech, speechMs: speechTotalMsRef.current });
+      }
+      console.log('[useVoiceRecorder] Recording stopped, processing audio', {
+        hadSpeech,
+        speechMs: speechTotalMsRef.current,
+      });
 
       const rawBlob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
       console.log('[useVoiceRecorder] Raw blob size:', rawBlob.size);
 
       const recordedMs = Date.now() - startedAtRef.current;
       const speechMs = speechTotalMsRef.current;
+      const substantialAudio = rawBlob.size >= 5000 || recordedMs >= minTranscribeMs;
 
-      // Auto-interview mode: never transcribe without real VAD speech (blocks TTS speaker echo).
+      // Prefer VAD, but still transcribe when the clip has enough audio (backend echo/STT guards apply).
       if (autoStopOnSilence) {
-        if (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) {
+        const vadOk = speechSeenRef.current && speechMs >= minSpeechMsForTranscribe;
+        if (!vadOk && !substantialAudio) {
           const msg = 'No audio detected (no speech)';
           processingRef.current = false;
           setStatus('error');
@@ -521,8 +534,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
           // Dynamic threshold: scale from noise floor, with sane bounds.
           const floor = Math.max(0.002, Math.min(0.05, noiseFloorRef.current));
-          const thresholdRms = Math.max(0.0028, floor * 1.75 + 0.0008);
-          const thresholdPeak = Math.max(0.018, thresholdRms * 2.6);
+          const thresholdRms = Math.max(0.0022, floor * 1.55 + 0.0006);
+          const thresholdPeak = Math.max(0.015, thresholdRms * 2.4);
           const isSpeech = rms > thresholdRms || peak > thresholdPeak;
 
           if (recordedMs < minRecordMs) return;
