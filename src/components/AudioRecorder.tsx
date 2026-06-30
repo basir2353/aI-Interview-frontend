@@ -35,6 +35,9 @@ interface AudioRecorderProps {
   autoStopOnSilence?: boolean;
   maxRecordMs?: number;
   stopDelayMs?: number;
+  /** Auto-stop if user never speaks within this window after mic opens. */
+  noSpeechIdleMs?: number;
+  onIdleTimeout?: () => void;
   /** ISO 639-1 language for STT (ur, ar, en). */
   transcribeLanguage?: string;
   /** Allow mixed-language answers (e.g. Arabic + English). */
@@ -64,6 +67,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     autoStopOnSilence: autoStopOnSilenceProp,
     maxRecordMs: maxRecordMsProp,
     stopDelayMs: stopDelayMsProp,
+    noSpeechIdleMs: noSpeechIdleMsProp,
+    onIdleTimeout,
     transcribeLanguage,
     transcribeMixed,
   },
@@ -89,6 +94,8 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     minTranscribeMs: minTranscribeMsProp ?? 1200,
     minSpeechMsForTranscribe: minSpeechMsForTranscribeProp ?? 2000,
     disableAdaptiveVad: disableAdaptiveVadProp ?? false,
+    noSpeechIdleMs: noSpeechIdleMsProp,
+    onIdleTimeout,
     transcribeLanguage,
     transcribeMixed,
     onTranscript: (text) => {

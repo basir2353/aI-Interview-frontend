@@ -18,6 +18,8 @@ import {
   TTS_POST_SPEECH_MIC_DELAY_MS,
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
   TTS_LIVE_ROOM_READY_MS,
+  INTERVIEW_SILENCE_AUTO_STOP_MS,
+  INTERVIEW_NO_SPEECH_IDLE_MS,
 } from '@/lib/ttsConfig';
 import { useInterviewEngagement } from '@/hooks/useInterviewEngagement';
 import { useInterviewHumanVoice } from '@/hooks/useInterviewHumanVoice';
@@ -109,6 +111,7 @@ export default function LiveInterviewPage() {
   const autoListenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoListeningRef = useRef(false);
   const noSpeechRetryRef = useRef(0);
+  const idleStopRef = useRef(false);
   const submitInFlightRef = useRef(false);
   const autoListenQuestionIdRef = useRef<string | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -272,7 +275,7 @@ export default function LiveInterviewPage() {
   }, [clearAutoListenTimeout, markMicEligibleAfterTts, startAutoListeningWindow]);
 
   const handleMicCaptureRejected = useCallback(
-    (message: string) => {
+    (message: string, opts?: { skipRetry?: boolean }) => {
       pipelineBusyRef.current = false;
       cancelHumanSpeechRef.current();
       autoListeningRef.current = false;
@@ -281,7 +284,7 @@ export default function LiveInterviewPage() {
       setMicOn(false);
       setVoicePhase('idle');
       voicePhaseRef.current = 'idle';
-      if (noSpeechRetryRef.current >= 2) {
+      if (opts?.skipRetry || noSpeechRetryRef.current >= 2) {
         setError(`${message} Tap the mic icon below if you are ready to speak.`);
         return;
       }
@@ -294,6 +297,12 @@ export default function LiveInterviewPage() {
     },
     [clearAutoListenTimeout, scheduleAutoListen]
   );
+
+  const handleMicIdleTimeout = useCallback(() => {
+    idleStopRef.current = true;
+    autoListeningRef.current = false;
+    setAutoMicPending(false);
+  }, []);
 
   useEffect(() => {
     return subscribeInterviewerSpeaking((speaking) => {
@@ -765,19 +774,21 @@ export default function LiveInterviewPage() {
   const handleMicToggle = () => {
     clearAutoListenTimeout();
     const recorder = audioRecorderRef.current;
-    if (recorder?.listening) {
-      autoListeningRef.current = false;
-      recorder.stop();
-      return;
-    }
-    if (recorder?.busy) return;
-    const micActive = micOn || autoListeningRef.current;
+    if (recorder?.busy && !recorder?.listening) return;
+    const micActive = micOn || autoListeningRef.current || autoMicPending || recorder?.listening;
     if (micActive) {
       userMutedRef.current = true;
       autoListeningRef.current = false;
-      recorder?.cancel();
+      setAutoMicPending(false);
+      idleStopRef.current = false;
+      if (recorder?.listening) {
+        recorder.cancel();
+      } else {
+        recorder?.cancel();
+      }
       setMicOn(false);
       setVoicePhase('idle');
+      voicePhaseRef.current = 'idle';
       setError('');
       return;
     }
@@ -1291,7 +1302,7 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Tap the mic icon to try again.'
         );
       }}
-      silenceMs={3200}
+      silenceMs={INTERVIEW_SILENCE_AUTO_STOP_MS}
       minRecordMs={800}
       minSpeechMs={400}
       minTranscribeMs={800}
@@ -1300,9 +1311,17 @@ export default function LiveInterviewPage() {
       autoStopOnSilence
       stopDelayMs={400}
       maxRecordMs={120000}
+      noSpeechIdleMs={INTERVIEW_NO_SPEECH_IDLE_MS}
+      onIdleTimeout={handleMicIdleTimeout}
       onNoSpeech={() => {
-        if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
-        handleMicCaptureRejected('I did not hear your answer.');
+        const wasIdleStop = idleStopRef.current;
+        idleStopRef.current = false;
+        if (!autoListeningRef.current && !wasIdleStop) return;
+        if (!voiceEnabled || loading || userMutedRef.current) return;
+        handleMicCaptureRejected(
+          wasIdleStop ? 'No answer detected after 20 seconds of silence.' : 'I did not hear your answer.',
+          { skipRetry: wasIdleStop }
+        );
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}

@@ -25,7 +25,10 @@ export interface UseVoiceRecorderOptions {
   disableAdaptiveVad?: boolean;
   /** Hard stop after this duration (safety). */
   maxRecordMs?: number;
-  /** Called when transcript is returned. */
+  /** Auto-stop if no VAD speech detected within this time after recording starts. */
+  noSpeechIdleMs?: number;
+  /** Called when recording stops due to noSpeechIdleMs with no speech detected. */
+  onIdleTimeout?: () => void;
   onTranscript?: (text: string) => void;
   /** Called for any fatal error (permission, conversion, backend). */
   onError?: (message: string, details?: unknown) => void;
@@ -79,9 +82,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     minSpeechMsForTranscribe = 2000,
     disableAdaptiveVad = false,
     maxRecordMs = 15000,
+    noSpeechIdleMs,
     onTranscript,
     onError,
     onProcessing,
+    onIdleTimeout,
     transcribeLanguage,
     transcribeMixed,
   } = options;
@@ -107,6 +112,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const noiseFloorRef = useRef<number>(0.008);
   const calibrateUntilRef = useRef<number>(0);
   const noSpeechWatchdogRef = useRef<number | null>(null);
+  const idleNoSpeechTimeoutRef = useRef<number | null>(null);
   const VAD_INTERVAL_MS = 160;
 
   const clearVad = useCallback(() => {
@@ -126,6 +132,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     if (noSpeechWatchdogRef.current) {
       window.clearTimeout(noSpeechWatchdogRef.current);
       noSpeechWatchdogRef.current = null;
+    }
+    if (idleNoSpeechTimeoutRef.current) {
+      window.clearTimeout(idleNoSpeechTimeoutRef.current);
+      idleNoSpeechTimeoutRef.current = null;
     }
   }, []);
 
@@ -294,6 +304,19 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           noiseFloorRef.current = Math.max(0.0015, noiseFloorRef.current * 0.55);
         }
       }, disableAdaptiveVad ? 15000 : 8000);
+
+      if (noSpeechIdleMs && noSpeechIdleMs > 0) {
+        idleNoSpeechTimeoutRef.current = window.setTimeout(() => {
+          idleNoSpeechTimeoutRef.current = null;
+          if (!speechSeenRef.current && recorderRef.current?.state === 'recording') {
+            console.log('[useVoiceRecorder] No-speech idle timeout — stopping clip', {
+              idleMs: noSpeechIdleMs,
+            });
+            onIdleTimeout?.();
+            stop();
+          }
+        }, noSpeechIdleMs);
+      }
     };
 
     recorder.onstop = async () => {
@@ -463,6 +486,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
             speechSeenRef.current = true;
             speechTotalMsRef.current += VAD_INTERVAL_MS;
             silenceSinceRef.current = null;
+            if (idleNoSpeechTimeoutRef.current) {
+              window.clearTimeout(idleNoSpeechTimeoutRef.current);
+              idleNoSpeechTimeoutRef.current = null;
+            }
             if (pendingStopTimeoutRef.current) {
               window.clearTimeout(pendingStopTimeoutRef.current);
               pendingStopTimeoutRef.current = null;
@@ -522,7 +549,6 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     return true;
   }, [
     autoStopOnSilence,
-    autoStopOnSilence,
     acquireStream,
     cancel,
     cleanupRecorderOnly,
@@ -534,6 +560,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     minTranscribeMs,
     minSpeechMsForTranscribe,
     disableAdaptiveVad,
+    noSpeechIdleMs,
+    onIdleTimeout,
     onError,
     onProcessing,
     onTranscript,
