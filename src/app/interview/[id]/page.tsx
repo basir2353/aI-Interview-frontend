@@ -600,6 +600,9 @@ export default function LiveInterviewPage() {
       }
 
       if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current) {
+        // #region agent log
+        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:reject-no-vad',message:'transcript rejected',data:{reason:'no_vad',textLen:cleaned.length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.warn('[Interview] Ignoring transcript — no VAD speech detected (likely TTS echo)');
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
@@ -615,17 +618,27 @@ export default function LiveInterviewPage() {
         isLikelyInterviewerEcho(cleaned, interviewerTexts, interviewLang) &&
         cleaned.length < 80
       ) {
+        // #region agent log
+        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:reject-echo',message:'transcript rejected',data:{reason:'echo',textLen:cleaned.length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.warn('[Interview] Ignoring likely TTS echo', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
       if (isSttHallucination(cleaned, interviewLang)) {
+        // #region agent log
+        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:reject-hallucination',message:'transcript rejected',data:{reason:'hallucination',textLen:cleaned.length},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.warn('[Interview] Ignoring STT hallucination', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
+
+      // #region agent log
+      fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:accept',message:'transcript accepted submitting',data:{textLen:cleaned.length,hadSpeech:lastClipHadSpeechRef.current,userMic:userInitiatedMicRef.current},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
 
       setMicOn(false);
       setVoicePhase('thinking');

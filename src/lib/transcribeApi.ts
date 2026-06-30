@@ -46,8 +46,14 @@ export async function transcribeAudio(
   const timeoutId = window.setTimeout(() => controller.abort(), 240000);
 
   let response: Response;
+  const url = transcribeUrl();
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'B',location:'transcribeApi.ts:request',message:'transcribe request start',data:{url,fileBytes:file.size,language:options?.language,mixed:options?.mixed},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   try {
-    response = await fetch(transcribeUrl(), {
+    response = await fetch(url, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
@@ -64,6 +70,11 @@ export async function transcribeAudio(
   window.clearTimeout(timeoutId);
 
   const payload = await response.json().catch(() => ({} as Record<string, unknown>));
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'B',location:'transcribeApi.ts:response',message:'transcribe response',data:{status:response.status,ok:response.ok,hasTranscript:typeof payload.transcript==='string',error:typeof payload.error==='string'?payload.error.slice(0,80):undefined},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   if (!response.ok) {
     const errorMessage =
       typeof payload.error === 'string' && payload.error.trim()
