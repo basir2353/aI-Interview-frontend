@@ -20,8 +20,11 @@ function filenameForBlob(blob: Blob): string {
   return 'recording.webm';
 }
 
-/** Call Railway/backend directly so Whisper is not capped by Vercel's 60s serverless limit. */
+/** Call same-origin proxy so transcription works reliably from the interview page. */
 function transcribeUrl(): string {
+  if (typeof window !== 'undefined') {
+    return '/api/transcribe';
+  }
   return `${getBackendOrigin()}/api/v1/transcribe`;
 }
 

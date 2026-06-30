@@ -50,10 +50,10 @@ function echoOverlap(transcript: string, interviewerText: string, lang: Intervie
   if (!t || !q || t.length < 4) return false;
   if (t === q) return true;
 
-  const overlapThreshold = lang === 'en-US' ? 0.42 : 0.55;
+  const overlapThreshold = lang === 'en-US' ? 0.58 : 0.65;
 
   if (q.length >= 10 && (q.includes(t) || t.includes(q))) {
-    if (t.length < q.length * 0.5) return false;
+    if (t.length < q.length * 0.65) return false;
     return true;
   }
 

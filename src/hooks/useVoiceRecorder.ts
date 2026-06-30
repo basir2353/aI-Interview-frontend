@@ -289,12 +289,11 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       setStatus('recording');
       console.log('[useVoiceRecorder] Recording started', { mimeType: recorder.mimeType });
       noSpeechWatchdogRef.current = window.setTimeout(() => {
-        if (disableAdaptiveVad) return;
         if (!speechSeenRef.current && recorderRef.current?.state === 'recording') {
           console.warn('[useVoiceRecorder] No speech detected yet — lowering VAD sensitivity');
-          noiseFloorRef.current = Math.max(0.002, noiseFloorRef.current * 0.6);
+          noiseFloorRef.current = Math.max(0.0015, noiseFloorRef.current * 0.55);
         }
-      }, 12000);
+      }, disableAdaptiveVad ? 15000 : 8000);
     };
 
     recorder.onstop = async () => {
@@ -451,9 +450,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           }
 
           // Dynamic threshold: scale from noise floor, with sane bounds.
-          const floor = Math.max(0.0025, Math.min(0.05, noiseFloorRef.current));
-          const thresholdRms = Math.max(0.0035, floor * 2.2 + 0.0012);
-          const thresholdPeak = Math.max(0.022, thresholdRms * 3.0);
+          const floor = Math.max(0.002, Math.min(0.05, noiseFloorRef.current));
+          const thresholdRms = Math.max(0.0028, floor * 1.75 + 0.0008);
+          const thresholdPeak = Math.max(0.018, thresholdRms * 2.6);
           const isSpeech = rms > thresholdRms || peak > thresholdPeak;
           // Count as silence when quiet so recording stops soon after user finishes speaking
           const isSilent = rms < thresholdRms * 0.7 && peak < thresholdPeak * 0.7;

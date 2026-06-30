@@ -58,13 +58,12 @@ export function isPromptVocabularyEcho(
   const tokens = STT_VOCAB_TOKENS[lang] ?? STT_VOCAB_TOKENS['en-US'];
   const words = wordsOf(transcript);
   if (words.length === 0) return true;
-  if (words.length >= 8) return false;
+  // Real answers often mention project/team/docker — only reject very short vocab-only clips.
+  if (words.length >= 5) return false;
 
   const hits = words.filter((w) => tokens.some((t) => matchesVocabToken(w, t))).length;
   const ratio = hits / words.length;
-  const isNonEnglish = lang !== 'en-US';
-  if (words.length <= 4 && ratio >= (isNonEnglish ? 0.75 : 0.5)) return true;
-  if (words.length <= 6 && ratio >= (isNonEnglish ? 0.85 : 0.65)) return true;
+  if (words.length <= 3 && ratio >= 0.85) return true;
   return false;
 }
 
@@ -86,8 +85,8 @@ export function isAnswerTooShort(
   if (!trimmed) return true;
   const lang = normalizeInterviewLanguage(interviewLanguage ?? 'en-US');
   const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length >= 5) return false;
-  const minChars = lang === 'en-US' ? 35 : 22;
+  if (words.length >= 3) return false;
+  const minChars = lang === 'en-US' ? 18 : 12;
   if (trimmed.length >= minChars) return false;
   return true;
 }

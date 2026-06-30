@@ -22,7 +22,7 @@ import { useInterviewEngagement } from '@/hooks/useInterviewEngagement';
 import { useInterviewHumanVoice } from '@/hooks/useInterviewHumanVoice';
 import { humanStatusLabel } from '@/lib/interviewEngagement';
 import { isLikelyInterviewerEcho, collectInterviewerTexts } from '@/lib/echoGuard';
-import { isInvalidCandidateTranscript } from '@/lib/sttGuard';
+import { isSttHallucination } from '@/lib/sttGuard';
 import { DraggableAvatarPanel } from '@/components/interview/DraggableAvatarPanel';
 import { LiveAnalysisBlock } from '@/components/interview/LiveAnalysisBlock';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
@@ -610,8 +610,18 @@ export default function LiveInterviewPage() {
         displayQuestion,
         interviewerCaption,
       ]);
-      if (isLikelyInterviewerEcho(cleaned, interviewerTexts, interviewLang) || isInvalidCandidateTranscript(cleaned, interviewLang)) {
-        console.warn('[Interview] Ignoring invalid or hallucinated transcript', { preview: cleaned.slice(0, 80) });
+      // Only block obvious echo/hallucination — backend validates again on submit.
+      if (
+        isLikelyInterviewerEcho(cleaned, interviewerTexts, interviewLang) &&
+        cleaned.length < 80
+      ) {
+        console.warn('[Interview] Ignoring likely TTS echo', { preview: cleaned.slice(0, 80) });
+        pipelineBusyRef.current = false;
+        handleMicCaptureRejected('That did not sound like a real answer.');
+        return;
+      }
+      if (isSttHallucination(cleaned, interviewLang)) {
+        console.warn('[Interview] Ignoring STT hallucination', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
@@ -1215,12 +1225,12 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Tap the mic icon to try again.'
         );
       }}
-      silenceMs={2400}
-      minRecordMs={1200}
-      minSpeechMs={800}
-      minTranscribeMs={1200}
-      minSpeechMsForTranscribe={1000}
-      disableAdaptiveVad
+      silenceMs={3200}
+      minRecordMs={800}
+      minSpeechMs={400}
+      minTranscribeMs={800}
+      minSpeechMsForTranscribe={500}
+      disableAdaptiveVad={false}
       autoStopOnSilence
       stopDelayMs={400}
       maxRecordMs={120000}
