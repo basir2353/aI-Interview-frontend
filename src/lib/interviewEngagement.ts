@@ -93,7 +93,7 @@ export function spokenBridgePhrase(lang: string, interviewerName = 'Ethan'): str
 /** On-screen status — warm, not technical. */
 export function humanStatusLabel(
   lang: string,
-  phase: 'idle' | 'listening' | 'thinking' | 'speaking',
+  phase: 'idle' | 'listening' | 'openingMic' | 'thinking' | 'speaking',
   interviewerName: string
 ): string {
   const code = normalizeInterviewLanguage(lang);
@@ -101,42 +101,49 @@ export function humanStatusLabel(
     'en-US': {
       idle: `${interviewerName} is ready for your answer`,
       listening: `${interviewerName} is listening…`,
+      openingMic: `Opening your microphone…`,
       thinking: `${interviewerName} is reflecting on your answer…`,
       speaking: `${interviewerName} is speaking…`,
     },
     es: {
       idle: `${interviewerName} espera tu respuesta`,
       listening: `${interviewerName} te escucha…`,
+      openingMic: 'Abriendo tu micrófono…',
       thinking: `${interviewerName} reflexiona sobre tu respuesta…`,
       speaking: `${interviewerName} habla…`,
     },
     fr: {
       idle: `${interviewerName} attend votre réponse`,
       listening: `${interviewerName} vous écoute…`,
+      openingMic: 'Ouverture de votre micro…',
       thinking: `${interviewerName} réfléchit à votre réponse…`,
       speaking: `${interviewerName} parle…`,
     },
     de: {
       idle: `${interviewerName} wartet auf Ihre Antwort`,
       listening: `${interviewerName} hört zu…`,
+      openingMic: 'Mikrofon wird geöffnet…',
       thinking: `${interviewerName} denkt über Ihre Antwort nach…`,
       speaking: `${interviewerName} spricht…`,
     },
     hi: {
       idle: `${interviewerName} आपके जवाब का इंतज़ार कर रहे हैं`,
       listening: `${interviewerName} सुन रहे हैं…`,
+      openingMic: 'माइक्रोफ़ोन खोला जा रहा है…',
       thinking: `${interviewerName} आपके जवाब पर सोच रहे हैं…`,
       speaking: `${interviewerName} बोल रहे हैं…`,
     },
     ar: {
       idle: `${interviewerName} بانتظار إجابتك`,
       listening: `${interviewerName} يستمع…`,
+      openingMic: 'جاري فتح الميكروفون…',
       thinking: `${interviewerName} يفكر في إجابتك…`,
       speaking: `${interviewerName} يتحدث…`,
     },
     ur: {
       idle: `${interviewerName} آپ کے جواب کا انتظار کر رہا ہے`,
       listening: `${interviewerName} سن رہا ہے…`,
+      openingMic: 'مائیکروفون کھولا جا رہا ہے…',
       thinking: `${interviewerName} آپ کے جواب پر غور کر رہا ہے…`,
       speaking: `${interviewerName} بول رہا ہے…`,
     },
