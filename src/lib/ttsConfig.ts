@@ -10,8 +10,8 @@ export const TTS_TURN_START_DELAY_MS = 40;
 /** Pause after interviewer finishes before opening mic (avoids TTS speaker echo). */
 export const TTS_AFTER_SPEAK_MIC_DELAY_MS = 1800;
 
-/** Shorter guard when TTS already finished (intro / manual speak path). */
-export const TTS_POST_SPEECH_MIC_DELAY_MS = 1500;
+/** Guard after TTS before mic opens — prevents speaker echo being recorded as answer. */
+export const TTS_POST_SPEECH_MIC_DELAY_MS = 2000;
 
 /** Pause between intro block and first question. */
 export const TTS_INTRO_TO_QUESTION_PAUSE_MS = 450;

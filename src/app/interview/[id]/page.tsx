@@ -12,10 +12,9 @@ import { CodeEditor } from '@/components/CodeEditor';
 import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
-import { speakInterviewerText, primeInterviewAudio, subscribeInterviewerSpeaking } from '@/lib/interviewerSpeech';
+import { useInterviewVoiceLoop } from '@/hooks/useInterviewVoiceLoop';
+import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
 import {
-  TTS_AFTER_SPEAK_MIC_DELAY_MS,
-  TTS_POST_SPEECH_MIC_DELAY_MS,
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
   TTS_LIVE_ROOM_READY_MS,
   INTERVIEW_SILENCE_AUTO_STOP_MS,
@@ -61,9 +60,6 @@ export default function LiveInterviewPage() {
   const [report, setReport] = useState<InterviewReport | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
-  const [micOn, setMicOn] = useState(false);
-  /** True while auto-open mic is in progress (refs alone do not re-render the status bar). */
-  const [autoMicPending, setAutoMicPending] = useState(false);
   const [introComplete, setIntroComplete] = useState(false);
   const [nowTs, setNowTs] = useState(Date.now());
   /** When user has finished speaking: submit immediately for natural, efficient flow */
@@ -90,7 +86,6 @@ export default function LiveInterviewPage() {
   );
   const interviewerPersona: InterviewerPersona =
     state?.interviewerPersona === 'zara' ? 'zara' : 'ethan';
-  const [voicePhase, setVoicePhase] = useState<VoicePipelinePhase>('idle');
   /** On-screen question text — synced when AI speaks or state updates. */
   const [displayQuestion, setDisplayQuestion] = useState('');
   const [introSpeaking, setIntroSpeaking] = useState(false);
@@ -101,17 +96,10 @@ export default function LiveInterviewPage() {
   useInterviewImmersiveMode(roomPhase === 'live' || roomPhase === 'instructions');
   useInterviewRoomTheme(true);
 
-  const pipelineBusyRef = useRef(false);
-  const userMutedRef = useRef(false);
-
   const audioRecorderRef = useRef<AudioRecorderHandle>(null);
   const cameraVideoRef = useRef<HTMLVideoElement>(null);
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  const autoListenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoListeningRef = useRef(false);
-  const noSpeechRetryRef = useRef(0);
-  const idleStopRef = useRef(false);
   const submitInFlightRef = useRef(false);
   const autoListenQuestionIdRef = useRef<string | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -125,18 +113,53 @@ export default function LiveInterviewPage() {
   const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
   const [interviewerCaption, setInterviewerCaption] = useState('');
   const cancelHumanSpeechRef = useRef<() => void>(() => {});
-  const lastClipHadSpeechRef = useRef(false);
-  const userInitiatedMicRef = useRef(false);
-  const interviewerSpeakingRef = useRef(false);
   const loadingRef = useRef(false);
-  const voicePhaseRef = useRef<VoicePipelinePhase>('idle');
-  /** Do not open mic until this timestamp (prevents TTS speaker echo auto-submit). */
-  const micEligibleAfterRef = useRef(0);
-  const autoListenScheduleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const micScheduleGenerationRef = useRef(0);
-  const micOnRef = useRef(false);
   const interviewLangRef = useRef(interviewLang);
   const interviewerPersonaRef = useRef<InterviewerPersona>(interviewerPersona);
+
+  const getLatestAiTurn = useCallback(() => {
+    const turns = state?.turns ?? [];
+    return (
+      [...turns].reverse().find((t) => t.role === 'ai' && !t.isIntro) ??
+      [...turns].reverse().find((t) => t.role === 'ai')
+    );
+  }, [state?.turns]);
+
+  const voiceLoop = useInterviewVoiceLoop({
+    voiceEnabled,
+    live: roomPhase === 'live',
+    interviewLang,
+    audioRecorderRef,
+    introPlaybackActiveRef,
+    getLatestAiTurn,
+  });
+
+  const {
+    micOn,
+    autoMicPending,
+    voicePhase,
+    setVoicePhase,
+    captureError,
+    setCaptureError,
+    lastClipHadSpeechRef,
+    userInitiatedMicRef,
+    idleStopRef,
+    onInterviewerSpeakStart,
+    onInterviewerSpeakEnd,
+    onIntroQuestionReady,
+    prepareForSubmit,
+    onSubmitFinished,
+    onCaptureRejected,
+    toggleMic,
+    closeMic,
+    onProcessing,
+    onTranscriptionError,
+    onNoSpeech,
+    onIdleTimeout,
+    onListeningChange,
+    resetNoSpeechRetries,
+    openMicForVoiceOff,
+  } = voiceLoop;
 
   useEffect(() => {
     interviewLangRef.current = interviewLang;
@@ -147,19 +170,10 @@ export default function LiveInterviewPage() {
   }, [interviewerPersona]);
 
   useEffect(() => {
-    voicePhaseRef.current = voicePhase;
-  }, [voicePhase]);
-
-  useEffect(() => {
-    micOnRef.current = micOn;
-  }, [micOn]);
-
-  useEffect(() => {
     if (roomPhase !== 'live') {
       introPipelineRanRef.current = false;
       introCompleteRef.current = false;
       setIntroComplete(false);
-      setAutoMicPending(false);
     }
   }, [roomPhase]);
 
@@ -184,224 +198,6 @@ export default function LiveInterviewPage() {
     const t = setTimeout(() => setWaveMessageShown(false), 2500);
     return () => clearTimeout(t);
   }, [waveMessageShown]);
-
-  const clearMicTimers = useCallback(() => {
-    if (autoListenTimeoutRef.current) {
-      clearTimeout(autoListenTimeoutRef.current);
-      autoListenTimeoutRef.current = null;
-    }
-    if (autoListenScheduleRef.current) {
-      clearTimeout(autoListenScheduleRef.current);
-      autoListenScheduleRef.current = null;
-    }
-  }, []);
-
-  const clearAutoListenTimeout = useCallback(() => {
-    clearMicTimers();
-    micScheduleGenerationRef.current += 1;
-    setAutoMicPending(false);
-  }, [clearMicTimers]);
-
-  const stopAutoListening = useCallback(() => {
-    clearMicTimers();
-    micScheduleGenerationRef.current += 1;
-    autoListeningRef.current = false;
-    setAutoMicPending(false);
-  }, [clearMicTimers]);
-
-  const markMicEligibleAfterTts = useCallback(() => {
-    micEligibleAfterRef.current = Date.now() + TTS_AFTER_SPEAK_MIC_DELAY_MS;
-  }, []);
-
-  const startAutoListeningWindow = useCallback((opts?: { userInitiated?: boolean }) => {
-    const latestAi = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
-    const isCodingTurn = Boolean(
-      latestAi?.isCodingQuestion || latestAi?.codingStarterCode || latestAi?.codingLanguage
-    );
-    if (!voiceEnabled || loadingRef.current || isCodingTurn) return;
-    if (userMutedRef.current && !opts?.userInitiated) return;
-    if (introPlaybackActiveRef.current || interviewerSpeakingRef.current) return;
-    if (voicePhaseRef.current === 'speaking') return;
-
-    const recorder = audioRecorderRef.current;
-    if (!opts?.userInitiated && recorder?.listening && autoListeningRef.current) {
-      setMicOn(true);
-      setAutoMicPending(false);
-      setVoicePhase('listening');
-      setError('');
-      return;
-    }
-    if (recorder?.busy && !recorder?.listening) return;
-    if (recorder?.listening) return;
-    if (!opts?.userInitiated && Date.now() < micEligibleAfterRef.current) return;
-
-    clearMicTimers();
-    autoListeningRef.current = true;
-    setAutoMicPending(true);
-    if (opts?.userInitiated) {
-      userInitiatedMicRef.current = true;
-    } else {
-      userInitiatedMicRef.current = false;
-    }
-
-    const scheduleGen = micScheduleGenerationRef.current;
-
-    const tryStartMic = async (attempt = 0) => {
-      if (scheduleGen !== micScheduleGenerationRef.current) return;
-      if (!autoListeningRef.current && !opts?.userInitiated) return;
-      if (userMutedRef.current && !opts?.userInitiated) return;
-      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
-        if (attempt < 60) {
-          window.setTimeout(() => void tryStartMic(attempt + 1), 300);
-        }
-        return;
-      }
-      if (audioRecorderRef.current?.busy && !audioRecorderRef.current?.listening) {
-        if (attempt < 40) {
-          window.setTimeout(() => void tryStartMic(attempt + 1), 400);
-        }
-        return;
-      }
-      if (audioRecorderRef.current?.listening) {
-        setMicOn(true);
-        setAutoMicPending(false);
-        setVoicePhase('listening');
-        setError('');
-        return;
-      }
-      const started = (await audioRecorderRef.current?.start()) ?? false;
-      if (started) {
-        await new Promise((r) => window.setTimeout(r, 120));
-      }
-      if (started && audioRecorderRef.current?.listening) {
-        setMicOn(true);
-        setAutoMicPending(false);
-        setVoicePhase('listening');
-        setError('');
-        return;
-      }
-      if (attempt < 25) {
-        window.setTimeout(() => void tryStartMic(attempt + 1), 350);
-        return;
-      }
-      autoListeningRef.current = false;
-      setAutoMicPending(false);
-      setMicOn(false);
-      setVoicePhase('idle');
-    };
-
-    void tryStartMic();
-
-    const listenWindowMs = 90000;
-    autoListenTimeoutRef.current = setTimeout(() => {
-      autoListeningRef.current = false;
-      audioRecorderRef.current?.cancel();
-      clearMicTimers();
-      setAutoMicPending(false);
-    }, listenWindowMs);
-  }, [voiceEnabled, clearMicTimers, state]);
-
-  /** After AI finishes speaking, open the mic for the candidate's turn. */
-  const scheduleAutoListen = useCallback((opts?: { skipTtsDelay?: boolean }) => {
-    if (userMutedRef.current) return;
-    if (micOnRef.current || audioRecorderRef.current?.listening) {
-      setAutoMicPending(false);
-      setError('');
-      return;
-    }
-    if (pipelineBusyRef.current && voicePhaseRef.current === 'transcribing') return;
-
-    if (!opts?.skipTtsDelay) {
-      markMicEligibleAfterTts();
-    } else {
-      micEligibleAfterRef.current = Date.now() + TTS_POST_SPEECH_MIC_DELAY_MS;
-    }
-
-    const scheduleGen = ++micScheduleGenerationRef.current;
-    clearMicTimers();
-    setAutoMicPending(true);
-    setError('');
-
-    const attemptOpenMic = () => {
-      if (scheduleGen !== micScheduleGenerationRef.current) return;
-      if (userMutedRef.current) {
-        setAutoMicPending(false);
-        return;
-      }
-      if (micOnRef.current || audioRecorderRef.current?.listening) {
-        setAutoMicPending(false);
-        return;
-      }
-      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
-        autoListenScheduleRef.current = setTimeout(attemptOpenMic, 250);
-        return;
-      }
-      if (loadingRef.current || submitInFlightRef.current) {
-        autoListenScheduleRef.current = setTimeout(attemptOpenMic, 350);
-        return;
-      }
-      if (pipelineBusyRef.current) {
-        autoListenScheduleRef.current = setTimeout(attemptOpenMic, 350);
-        return;
-      }
-      autoListenScheduleRef.current = null;
-      void audioRecorderRef.current?.warmUp?.();
-      startAutoListeningWindow();
-    };
-
-    const waitMs = Math.max(0, micEligibleAfterRef.current - Date.now());
-    autoListenScheduleRef.current = setTimeout(attemptOpenMic, waitMs);
-  }, [clearMicTimers, markMicEligibleAfterTts, startAutoListeningWindow]);
-
-  const handleMicCaptureRejected = useCallback(
-    (message: string, opts?: { skipRetry?: boolean }) => {
-      pipelineBusyRef.current = false;
-      cancelHumanSpeechRef.current();
-      autoListeningRef.current = false;
-      setAutoMicPending(false);
-      clearAutoListenTimeout();
-      setMicOn(false);
-      setVoicePhase('idle');
-      voicePhaseRef.current = 'idle';
-      if (opts?.skipRetry || noSpeechRetryRef.current >= 2) {
-        setError(`${message} Tap the mic icon below if you are ready to speak.`);
-        return;
-      }
-      noSpeechRetryRef.current += 1;
-      setError('');
-      window.setTimeout(() => {
-        if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
-        scheduleAutoListen();
-      }, 1200);
-    },
-    [clearAutoListenTimeout, scheduleAutoListen]
-  );
-
-  const handleMicIdleTimeout = useCallback(() => {
-    idleStopRef.current = true;
-    autoListeningRef.current = false;
-    setAutoMicPending(false);
-  }, []);
-
-  useEffect(() => {
-    return subscribeInterviewerSpeaking((speaking) => {
-      interviewerSpeakingRef.current = speaking;
-      if (speaking) {
-        stopAutoListening();
-        autoListeningRef.current = false;
-        audioRecorderRef.current?.cancel();
-        setMicOn(false);
-        setVoicePhase('speaking');
-        return;
-      }
-      setIntroSpeaking(false);
-      if (voicePhaseRef.current === 'speaking') {
-        voicePhaseRef.current = 'idle';
-        setVoicePhase('idle');
-      }
-      // Mic opens via onAutoSpeakEnd / finishIntroAndOpenMic — not here (duplicate calls were cancelling the mic).
-    });
-  }, [stopAutoListening]);
 
   /** Intro beats + first question are spoken manually on live entry — skip auto-TTS for those. */
   const manualSpokenAiTurnIds = useMemo(() => {
@@ -440,24 +236,15 @@ export default function LiveInterviewPage() {
     onSpeakText: handleAiSpeakText,
     onAutoSpeakStart: () => {
       cancelHumanSpeechRef.current();
-      stopAutoListening();
-      autoListeningRef.current = false;
-      noSpeechRetryRef.current = 0;
-      audioRecorderRef.current?.cancel();
-      setMicOn(false);
-      setVoicePhase('speaking');
-      voicePhaseRef.current = 'speaking';
+      resetNoSpeechRetries();
+      onInterviewerSpeakStart();
     },
     onAutoSpeakEnd: () => {
       if (introPlaybackActiveRef.current) return;
-      noSpeechRetryRef.current = 0;
-      userMutedRef.current = false;
       setLiveCaption('');
       setIntroSpeaking(false);
-      voicePhaseRef.current = 'idle';
-      setVoicePhase('idle');
       if (!loadingRef.current && !submitInFlightRef.current) {
-        scheduleAutoListen();
+        onInterviewerSpeakEnd();
       }
     },
     skipTurnIds,
@@ -465,17 +252,16 @@ export default function LiveInterviewPage() {
     persona: interviewerPersona,
   });
 
-  /** Stable refs for intro pipeline — state updates must not cancel in-flight intro TTS. */
-  const scheduleAutoListenRef = useRef(scheduleAutoListen);
-  const stopAutoListeningRef = useRef(stopAutoListening);
+  const onIntroQuestionReadyRef = useRef(onIntroQuestionReady);
   const markTurnSpokenRef = useRef(markTurnSpoken);
   const syncDisplayQuestionFromStateRef = useRef(syncDisplayQuestionFromState);
+  const onInterviewerSpeakStartRef = useRef(onInterviewerSpeakStart);
   useEffect(() => {
-    scheduleAutoListenRef.current = scheduleAutoListen;
-    stopAutoListeningRef.current = stopAutoListening;
+    onIntroQuestionReadyRef.current = onIntroQuestionReady;
     markTurnSpokenRef.current = markTurnSpoken;
     syncDisplayQuestionFromStateRef.current = syncDisplayQuestionFromState;
-  }, [scheduleAutoListen, stopAutoListening, markTurnSpoken, syncDisplayQuestionFromState]);
+    onInterviewerSpeakStartRef.current = onInterviewerSpeakStart;
+  }, [onIntroQuestionReady, markTurnSpoken, syncDisplayQuestionFromState, onInterviewerSpeakStart]);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
@@ -620,58 +406,20 @@ export default function LiveInterviewPage() {
     if (!lastAiTurn) return;
     if (autoListenQuestionIdRef.current === lastAiTurn.id) return;
     autoListenQuestionIdRef.current = lastAiTurn.id;
-    noSpeechRetryRef.current = 0;
+    resetNoSpeechRetries();
 
-    // When voice is ON: do not start listening here — wait for the full question to be spoken, then onAutoSpeakEnd will start listening.
-    // When voice is OFF: start listening now so the user can answer without TTS.
     const isCodingTurn = Boolean(
       lastAiTurn.isCodingQuestion || lastAiTurn.codingStarterCode || lastAiTurn.codingLanguage
     );
     if (!voiceEnabled && !isCodingTurn) {
-      startAutoListeningWindow();
+      void openMicForVoiceOff();
     }
 
     if (isCodingTurn) {
-      clearAutoListenTimeout();
-      autoListeningRef.current = false;
+      closeMic(true);
       audioRecorderRef.current?.stop();
     }
-  }, [state, loading, voiceEnabled, startAutoListeningWindow]);
-
-  /** Safety net: if AI finished but mic never opened, retry auto-listen. */
-  useEffect(() => {
-    if (roomPhase !== 'live' || !voiceEnabled || micOn || autoMicPending) return;
-    if (loading || introSpeaking || pipelineWaiting) return;
-    if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
-    if (submitInFlightRef.current || pipelineBusyRef.current) return;
-    const lastAiTurn =
-      [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro) ??
-      [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
-    if (!lastAiTurn && !displayQuestion.trim()) return;
-    const isCodingTurn = Boolean(
-      lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
-    );
-    if (isCodingTurn || userMutedRef.current) return;
-
-    const timer = window.setTimeout(() => {
-      if (micOn || autoListeningRef.current || userMutedRef.current || loadingRef.current) return;
-      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
-      if (submitInFlightRef.current || pipelineBusyRef.current) return;
-      scheduleAutoListen({ skipTtsDelay: true });
-    }, 1800);
-    return () => window.clearTimeout(timer);
-  }, [
-    roomPhase,
-    voiceEnabled,
-    micOn,
-    autoMicPending,
-    loading,
-    introSpeaking,
-    pipelineWaiting,
-    displayQuestion,
-    state?.turns,
-    scheduleAutoListen,
-  ]);
+  }, [state, loading, voiceEnabled, openMicForVoiceOff, closeMic, resetNoSpeechRetries]);
 
   useEffect(() => {
     const lastAiTurn = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
@@ -693,7 +441,6 @@ export default function LiveInterviewPage() {
     const text = rawText.trim();
     if (!text || loading || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
-    pipelineBusyRef.current = true;
     cancelHumanSpeechRef.current();
     setPendingAnswer(null);
     setCountdownRemaining(0);
@@ -703,13 +450,9 @@ export default function LiveInterviewPage() {
       countdownIntervalRef.current = null;
     }
     stopSpeaking();
-    clearAutoListenTimeout();
-    autoListeningRef.current = false;
-    noSpeechRetryRef.current = 0;
-    audioRecorderRef.current?.stop();
-    setMicOn(false);
-    setVoicePhase('thinking');
+    prepareForSubmit();
     setError('');
+    setCaptureError('');
     setLoading(true);
     try {
       const res = await api.submitAnswer(id, text, extras);
@@ -726,7 +469,8 @@ export default function LiveInterviewPage() {
         }
       }
       setAnswerText('');
-      noSpeechRetryRef.current = 0;
+      resetNoSpeechRetries();
+      onSubmitFinished();
     } catch (e) {
       const msg = interviewErrorMessage(e, interviewLang);
       const rejectedCapture = isRejectedVoiceCaptureError(e);
@@ -739,30 +483,31 @@ export default function LiveInterviewPage() {
       );
       setVoicePhase('idle');
       if (voiceEnabled && rejectedCapture) {
-        handleMicCaptureRejected('Could not use that recording.');
+        onSubmitFinished();
+        onCaptureRejected('Could not use that recording.');
       } else if (voiceEnabled) {
-        scheduleAutoListen();
+        onSubmitFinished({ reopen: true });
+      } else {
+        onSubmitFinished();
       }
     } finally {
       setLoading(false);
-      pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, interviewLang, loadState, loading, stopSpeaking, voiceEnabled, handleMicCaptureRejected, scheduleAutoListen, syncDisplayQuestionFromState]);
+  }, [id, interviewLang, loadState, loading, stopSpeaking, voiceEnabled, onSubmitFinished, onCaptureRejected, prepareForSubmit, resetNoSpeechRetries, syncDisplayQuestionFromState, setCaptureError, setVoicePhase]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       const cleaned = text.trim();
       if (!cleaned) {
-        pipelineBusyRef.current = false;
+        onSubmitFinished();
         return;
       }
 
       const substantialTranscript = cleaned.length >= 24 || cleaned.split(/\s+/).filter(Boolean).length >= 5;
       if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current && !substantialTranscript) {
         console.warn('[Interview] Ignoring transcript — no VAD speech detected (likely TTS echo)');
-        pipelineBusyRef.current = false;
-        handleMicCaptureRejected('That did not sound like a real answer.');
+        onCaptureRejected('That did not sound like a real answer.');
         return;
       }
 
@@ -773,30 +518,24 @@ export default function LiveInterviewPage() {
       const echoSources = currentQuestionText
         ? [currentQuestionText, interviewerCaption.trim()].filter(Boolean)
         : collectInterviewerTexts(state?.turns, [displayQuestion, interviewerCaption]);
-      // Only block obvious echo/hallucination — backend validates again on submit.
       if (
         isLikelyInterviewerEcho(cleaned, echoSources, interviewLang) &&
         cleaned.length < 120
       ) {
         console.warn('[Interview] Ignoring likely TTS echo', { preview: cleaned.slice(0, 80) });
-        pipelineBusyRef.current = false;
-        handleMicCaptureRejected('That did not sound like a real answer.');
+        onCaptureRejected('That did not sound like a real answer.');
         return;
       }
       if (isSttHallucination(cleaned, interviewLang) && !substantialTranscript) {
         console.warn('[Interview] Ignoring STT hallucination', { preview: cleaned.slice(0, 80) });
-        pipelineBusyRef.current = false;
-        handleMicCaptureRejected('That did not sound like a real answer.');
+        onCaptureRejected('That did not sound like a real answer.');
         return;
       }
 
-      setMicOn(false);
-      setVoicePhase('thinking');
       setAnswerText(cleaned);
-      autoListeningRef.current = false;
-      noSpeechRetryRef.current = 0;
-      clearAutoListenTimeout();
+      resetNoSpeechRetries();
       setError('');
+      setCaptureError('');
       setCameraUserIdle(false);
       setPendingAnswer(null);
       setCountdownRemaining(0);
@@ -809,13 +548,15 @@ export default function LiveInterviewPage() {
       void submitAnswerText(cleaned);
     },
     [
-      clearAutoListenTimeout,
       submitAnswerText,
       displayQuestion,
       interviewerCaption,
       state?.turns,
-      handleMicCaptureRejected,
+      onCaptureRejected,
+      onSubmitFinished,
+      resetNoSpeechRetries,
       interviewLang,
+      setCaptureError,
     ]
   );
 
@@ -840,9 +581,7 @@ export default function LiveInterviewPage() {
 
   const handleEndInterview = async () => {
     stopSpeaking();
-    clearAutoListenTimeout();
-    autoListeningRef.current = false;
-    noSpeechRetryRef.current = 0;
+    closeMic(true);
     audioRecorderRef.current?.stop();
     setLoading(true);
     try {
@@ -858,36 +597,10 @@ export default function LiveInterviewPage() {
   };
 
   const handleMicToggle = () => {
-    clearAutoListenTimeout();
-    const recorder = audioRecorderRef.current;
-    if (recorder?.busy && !recorder?.listening) return;
-    const micActive = micOn || autoListeningRef.current || autoMicPending || recorder?.listening;
-    if (micActive) {
-      autoListeningRef.current = false;
-      setAutoMicPending(false);
-      idleStopRef.current = false;
-      if (recorder?.listening) {
-        userMutedRef.current = false;
-        recorder.stop();
-        setMicOn(false);
-        setVoicePhase('transcribing');
-        voicePhaseRef.current = 'transcribing';
-        setError('');
-        return;
-      }
-      userMutedRef.current = true;
-      recorder?.cancel();
-      setMicOn(false);
-      setVoicePhase('idle');
-      voicePhaseRef.current = 'idle';
-      setError('');
-      return;
-    }
-    userMutedRef.current = false;
-    noSpeechRetryRef.current = 0;
-    userInitiatedMicRef.current = true;
-    if (loadingRef.current || pipelineBusyRef.current) return;
-    startAutoListeningWindow({ userInitiated: true });
+    idleStopRef.current = false;
+    setError('');
+    setCaptureError('');
+    toggleMic();
   };
 
   const handleCameraToggle = () => {
@@ -930,15 +643,12 @@ export default function LiveInterviewPage() {
       window.speechSynthesis.cancel();
     }
     stopSpeaking();
-    clearAutoListenTimeout();
-    autoListeningRef.current = false;
-    noSpeechRetryRef.current = 0;
+    closeMic(true);
     audioRecorderRef.current?.cancel();
-    setMicOn(false);
     introPipelineRanRef.current = false;
     setLiveScreenReady(false);
     setRoomPhase('instructions');
-  }, [stopSpeaking, clearAutoListenTimeout]);
+  }, [stopSpeaking, closeMic]);
 
   const enterLiveRoom = useCallback(() => {
     primeInterviewAudio();
@@ -1018,18 +728,12 @@ export default function LiveInterviewPage() {
       setIntroComplete(true);
       setIntroSpeaking(false);
       setLiveCaption('');
-      voicePhaseRef.current = 'idle';
       setVoicePhase('idle');
-      userMutedRef.current = false;
-      scheduleAutoListenRef.current({ skipTtsDelay: true });
+      onIntroQuestionReadyRef.current();
     };
 
     if (introPipelineRanRef.current) {
-      if (
-        !introCompleteRef.current &&
-        !introPlaybackActiveRef.current &&
-        !interviewerSpeakingRef.current
-      ) {
+      if (!introCompleteRef.current && !introPlaybackActiveRef.current) {
         recoverMicAfterCancelledIntro();
       }
       return;
@@ -1040,8 +744,8 @@ export default function LiveInterviewPage() {
 
     const finishIntroAndOpenMic = (questionTurnId?: string, questionText?: string) => {
       if (introCompleteRef.current) {
-        if (!audioRecorderRef.current?.listening && !micOnRef.current) {
-          scheduleAutoListenRef.current({ skipTtsDelay: true });
+        if (!audioRecorderRef.current?.listening) {
+          onIntroQuestionReadyRef.current();
         }
         return;
       }
@@ -1050,17 +754,15 @@ export default function LiveInterviewPage() {
       setIntroComplete(true);
       setIntroSpeaking(false);
       setLiveCaption('');
-      voicePhaseRef.current = 'idle';
       setVoicePhase('idle');
       if (questionText?.trim()) {
         setDisplayQuestion(questionText.trim());
       }
-      userMutedRef.current = false;
       if (questionTurnId) markTurnSpokenRef.current(questionTurnId);
       if (typeof window !== 'undefined' && id) {
         window.sessionStorage.setItem(`intervion_intro_spoken_${id}`, '1');
       }
-      scheduleAutoListenRef.current({ skipTtsDelay: true });
+      onIntroQuestionReadyRef.current();
     };
 
     const resumeLiveSession = (liveState: InterviewState) => {
@@ -1105,11 +807,7 @@ export default function LiveInterviewPage() {
           lang: interviewLangRef.current,
           persona: interviewerPersonaRef.current,
           onStart: () => {
-            stopAutoListeningRef.current();
-            autoListeningRef.current = false;
-            audioRecorderRef.current?.cancel();
-            setMicOn(false);
-            setVoicePhase('speaking');
+            onInterviewerSpeakStartRef.current();
             setIntroSpeaking(duringIntro);
             if (duringIntro) {
               setLiveCaption(text);
@@ -1205,9 +903,7 @@ export default function LiveInterviewPage() {
 
   useEffect(() => {
     return () => {
-      clearAutoListenTimeout();
-      autoListeningRef.current = false;
-      noSpeechRetryRef.current = 0;
+      closeMic(true);
       audioRecorderRef.current?.stop();
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
@@ -1216,7 +912,7 @@ export default function LiveInterviewPage() {
       screenStreamRef.current?.getTracks().forEach((t) => t.stop());
       screenStreamRef.current = null;
     };
-  }, [clearAutoListenTimeout]);
+  }, [closeMic]);
 
   // When user closes tab or navigates away, end the interview so results appear on recruiter dashboard
   useEffect(() => {
@@ -1399,41 +1095,8 @@ export default function LiveInterviewPage() {
       transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
       transcribeMixed={sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang))}
       onTranscript={handleVoiceTranscript}
-      onProcessing={(info) => {
-        lastClipHadSpeechRef.current = info.hadSpeech;
-        setMicOn(false);
-        setVoicePhase('transcribing');
-        voicePhaseRef.current = 'transcribing';
-        setError('');
-        pipelineBusyRef.current = true;
-      }}
-      onTranscriptionError={(msg) => {
-        pipelineBusyRef.current = false;
-        voicePhaseRef.current = 'idle';
-        cancelHumanSpeechRef.current();
-        autoListeningRef.current = false;
-        stopAutoListening();
-        setMicOn(false);
-        setVoicePhase('idle');
-        if (/no audio detected|empty recording|no speech/i.test(msg)) {
-          handleMicCaptureRejected(
-            interviewLang === 'ur' ? 'Aap ki awaaz clear nahi aayi.' : 'I did not catch that.'
-          );
-          return;
-        }
-        setError(
-          msg.includes('timed out')
-            ? interviewLang === 'ur'
-              ? 'Transcription mein waqt zyada lag gaya. Dobara koshish karein.'
-              : 'Transcription took too long. Please try again.'
-            : interviewLang === 'ur'
-              ? 'Transcription fail ho gayi. Neeche mic button dabayein.'
-              : 'Transcription failed. Tap the mic icon to try again.'
-        );
-        if (voiceEnabled) {
-          window.setTimeout(() => scheduleAutoListen({ skipTtsDelay: true }), 800);
-        }
-      }}
+      onProcessing={onProcessing}
+      onTranscriptionError={onTranscriptionError}
       silenceMs={INTERVIEW_SILENCE_AUTO_STOP_MS}
       minRecordMs={600}
       minSpeechMs={300}
@@ -1444,33 +1107,15 @@ export default function LiveInterviewPage() {
       stopDelayMs={350}
       maxRecordMs={120000}
       noSpeechIdleMs={INTERVIEW_NO_SPEECH_IDLE_MS}
-      onIdleTimeout={handleMicIdleTimeout}
+      onIdleTimeout={onIdleTimeout}
       onNoSpeech={() => {
         const wasIdleStop = idleStopRef.current;
         idleStopRef.current = false;
-        if (!autoListeningRef.current && !wasIdleStop) return;
-        if (!voiceEnabled || loading || userMutedRef.current) return;
-        handleMicCaptureRejected(
-          wasIdleStop ? 'No answer detected after 20 seconds of silence.' : 'I did not hear your answer.',
-          { skipRetry: wasIdleStop }
-        );
+        onNoSpeech(wasIdleStop);
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}
-      onListeningChange={(listening) => {
-        if (listening) {
-          userMutedRef.current = false;
-          setMicOn(true);
-          setVoicePhase('listening');
-          return;
-        }
-        setMicOn(false);
-        if (userMutedRef.current) {
-          setVoicePhase((prev) => (prev === 'listening' || prev === 'transcribing' ? 'idle' : prev));
-          return;
-        }
-        setVoicePhase((prev) => (prev === 'listening' ? 'transcribing' : prev));
-      }}
+      onListeningChange={onListeningChange}
       hideButton
     />
   );
@@ -1681,7 +1326,7 @@ export default function LiveInterviewPage() {
                     </button>
                   </div>
                   {error && (
-                    <p className="rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-2 text-xs text-[var(--error-text)]">{error}</p>
+                    <p className="rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-2 text-xs text-[var(--error-text)]">{error || captureError}</p>
                   )}
                 </>
               ) : codePanelRequested ? (
@@ -1806,7 +1451,7 @@ export default function LiveInterviewPage() {
                   </button>
                 </div>
                 {error && (
-                  <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
+                  <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error || captureError}</p>
                 )}
               </>
             ) : codePanelRequested ? (
@@ -1864,7 +1509,7 @@ export default function LiveInterviewPage() {
               </button>
             </div>
             {error && (
-              <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
+              <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error || captureError}</p>
             )}
           </div>
         ) : showNotepadTab && activeTab === 'notepad' ? (
@@ -1906,7 +1551,7 @@ export default function LiveInterviewPage() {
               statusLabel={humanStatusText}
             />
             {error && (
-              <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
+              <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error || captureError}</p>
             )}
           </div>
         )}
