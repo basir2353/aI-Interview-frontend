@@ -104,31 +104,53 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
 
   const startedAtRef = useRef<number>(0);
   const vadIntervalRef = useRef<number | null>(null);
-  const silenceSinceRef = useRef<number | null>(null);
   const maxStopTimeoutRef = useRef<number | null>(null);
-  const pendingStopTimeoutRef = useRef<number | null>(null);
   const speechSeenRef = useRef<boolean>(false);
   const speechTotalMsRef = useRef<number>(0);
+  const speechStreakRef = useRef<number>(0);
   const noiseFloorRef = useRef<number>(0.008);
   const calibrateUntilRef = useRef<number>(0);
   const noSpeechWatchdogRef = useRef<number | null>(null);
   const idleNoSpeechTimeoutRef = useRef<number | null>(null);
+  const postSpeechSilenceTimeoutRef = useRef<number | null>(null);
   const VAD_INTERVAL_MS = 160;
+  /** Consecutive VAD speech frames required before resetting the silence countdown. */
+  const SPEECH_STREAK_FRAMES = 3;
+
+  const clearPostSpeechSilenceStop = useCallback(() => {
+    if (postSpeechSilenceTimeoutRef.current) {
+      window.clearTimeout(postSpeechSilenceTimeoutRef.current);
+      postSpeechSilenceTimeoutRef.current = null;
+    }
+  }, []);
+
+  const armPostSpeechSilenceStop = useCallback(
+    (stopFn: () => void) => {
+      clearPostSpeechSilenceStop();
+      postSpeechSilenceTimeoutRef.current = window.setTimeout(() => {
+        postSpeechSilenceTimeoutRef.current = null;
+        if (recorderRef.current?.state === 'recording' && speechSeenRef.current) {
+          console.log('[useVoiceRecorder] Post-speech silence timeout — stopping clip', {
+            silenceMs,
+          });
+          stopFn();
+        }
+      }, silenceMs + stopDelayMs);
+    },
+    [clearPostSpeechSilenceStop, silenceMs, stopDelayMs]
+  );
 
   const clearVad = useCallback(() => {
     if (vadIntervalRef.current) {
       window.clearInterval(vadIntervalRef.current);
       vadIntervalRef.current = null;
     }
-    silenceSinceRef.current = null;
     speechSeenRef.current = false;
     speechTotalMsRef.current = 0;
+    speechStreakRef.current = 0;
     noiseFloorRef.current = 0.008;
     calibrateUntilRef.current = 0;
-    if (pendingStopTimeoutRef.current) {
-      window.clearTimeout(pendingStopTimeoutRef.current);
-      pendingStopTimeoutRef.current = null;
-    }
+    clearPostSpeechSilenceStop();
     if (noSpeechWatchdogRef.current) {
       window.clearTimeout(noSpeechWatchdogRef.current);
       noSpeechWatchdogRef.current = null;
@@ -137,7 +159,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       window.clearTimeout(idleNoSpeechTimeoutRef.current);
       idleNoSpeechTimeoutRef.current = null;
     }
-  }, []);
+  }, [clearPostSpeechSilenceStop]);
 
   const clearMaxStop = useCallback(() => {
     if (maxStopTimeoutRef.current) {
@@ -273,8 +295,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     streamRef.current = stream;
     chunksRef.current = [];
     startedAtRef.current = Date.now();
-    silenceSinceRef.current = null;
     speechSeenRef.current = false;
+    speechStreakRef.current = 0;
     noiseFloorRef.current = 0.008;
     calibrateUntilRef.current = Date.now() + 1000;
 
@@ -477,55 +499,26 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           const thresholdRms = Math.max(0.0028, floor * 1.75 + 0.0008);
           const thresholdPeak = Math.max(0.018, thresholdRms * 2.6);
           const isSpeech = rms > thresholdRms || peak > thresholdPeak;
-          // Count as silence when quiet so recording stops soon after user finishes speaking
-          const isSilent = rms < thresholdRms * 0.7 && peak < thresholdPeak * 0.7;
 
           if (recordedMs < minRecordMs) return;
 
           if (isSpeech) {
-            speechSeenRef.current = true;
-            speechTotalMsRef.current += VAD_INTERVAL_MS;
-            silenceSinceRef.current = null;
-            if (idleNoSpeechTimeoutRef.current) {
-              window.clearTimeout(idleNoSpeechTimeoutRef.current);
-              idleNoSpeechTimeoutRef.current = null;
-            }
-            if (pendingStopTimeoutRef.current) {
-              window.clearTimeout(pendingStopTimeoutRef.current);
-              pendingStopTimeoutRef.current = null;
+            speechStreakRef.current += 1;
+            if (speechStreakRef.current >= SPEECH_STREAK_FRAMES) {
+              speechSeenRef.current = true;
+              speechTotalMsRef.current += VAD_INTERVAL_MS;
+              if (idleNoSpeechTimeoutRef.current) {
+                window.clearTimeout(idleNoSpeechTimeoutRef.current);
+                idleNoSpeechTimeoutRef.current = null;
+              }
+              if (minSpeechMs <= 0 || speechTotalMsRef.current >= minSpeechMs) {
+                armPostSpeechSilenceStop(stop);
+              }
             }
             return;
           }
 
-          // Only end on silence after we've actually observed speech and (optionally) enough speech time.
-          if (!speechSeenRef.current) return;
-          if (minSpeechMs > 0 && speechTotalMsRef.current < minSpeechMs) return;
-
-          if (isSilent) {
-            if (silenceSinceRef.current == null) silenceSinceRef.current = now;
-            const silentFor = now - silenceSinceRef.current;
-            if (silentFor >= silenceMs && recorderRef.current?.state === 'recording') {
-              if (!pendingStopTimeoutRef.current) {
-                console.log('[useVoiceRecorder] Auto-stopping on silence', {
-                  silentFor,
-                  rms,
-                  peak,
-                  thresholdRms,
-                  thresholdPeak,
-                });
-                pendingStopTimeoutRef.current = window.setTimeout(() => {
-                  pendingStopTimeoutRef.current = null;
-                  if (recorderRef.current?.state === 'recording') stop();
-                }, stopDelayMs);
-              }
-            }
-          } else {
-            silenceSinceRef.current = null;
-            if (pendingStopTimeoutRef.current) {
-              window.clearTimeout(pendingStopTimeoutRef.current);
-              pendingStopTimeoutRef.current = null;
-            }
-          }
+          speechStreakRef.current = 0;
         }, VAD_INTERVAL_MS);
       } catch (e) {
         console.warn('[useVoiceRecorder] VAD setup failed; continuing without silence auto-stop', e);
@@ -550,6 +543,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   }, [
     autoStopOnSilence,
     acquireStream,
+    armPostSpeechSilenceStop,
     cancel,
     cleanupRecorderOnly,
     clearMaxStop,
