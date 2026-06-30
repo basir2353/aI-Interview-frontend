@@ -1,5 +1,8 @@
 /** Encode browser recording to 16 kHz mono 16-bit PCM WAV for Whisper. */
-export async function encodeBlobTo16kMonoWav(blob: Blob): Promise<Blob> {
+export async function encodeBlobTo16kMonoWav(
+  blob: Blob,
+  options?: { trimStartSec?: number; trimEndSec?: number }
+): Promise<Blob> {
   const arrayBuffer = await blob.arrayBuffer();
   if (!arrayBuffer.byteLength) {
     throw new Error('Empty audio blob');
@@ -16,7 +19,19 @@ export async function encodeBlobTo16kMonoWav(blob: Blob): Promise<Blob> {
     source.connect(offline.destination);
     source.start(0);
     const rendered = await offline.startRendering();
-    const pcm = floatTo16BitPcm(rendered.getChannelData(0));
+    const full = rendered.getChannelData(0);
+
+    const trimStart = Math.max(0, Math.floor((options?.trimStartSec ?? 0) * targetRate));
+    const trimEnd =
+      options?.trimEndSec != null
+        ? Math.min(full.length, Math.ceil(options.trimEndSec * targetRate))
+        : full.length;
+    const slice =
+      trimStart > 0 || trimEnd < full.length
+        ? full.subarray(trimStart, Math.max(trimStart + 1, trimEnd))
+        : full;
+
+    const pcm = floatTo16BitPcm(slice);
     return new Blob([pcmToWav(pcm, targetRate)], { type: 'audio/wav' });
   } finally {
     await decodeCtx.close().catch(() => undefined);

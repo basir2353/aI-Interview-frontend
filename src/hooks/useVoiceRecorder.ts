@@ -110,6 +110,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   const maxStopTimeoutRef = useRef<number | null>(null);
   const speechSeenRef = useRef<boolean>(false);
   const speechTotalMsRef = useRef<number>(0);
+  const firstSpeechAtMsRef = useRef<number | null>(null);
+  const lastSpeechAtMsRef = useRef<number | null>(null);
   const speechStreakRef = useRef<number>(0);
   const noiseFloorRef = useRef<number>(0.008);
   const calibrateUntilRef = useRef<number>(0);
@@ -150,6 +152,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     }
     speechSeenRef.current = false;
     speechTotalMsRef.current = 0;
+    firstSpeechAtMsRef.current = null;
+    lastSpeechAtMsRef.current = null;
     speechStreakRef.current = 0;
     noiseFloorRef.current = 0.008;
     calibrateUntilRef.current = 0;
@@ -299,6 +303,9 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     chunksRef.current = [];
     startedAtRef.current = Date.now();
     speechSeenRef.current = false;
+    speechTotalMsRef.current = 0;
+    firstSpeechAtMsRef.current = null;
+    lastSpeechAtMsRef.current = null;
     speechStreakRef.current = 0;
     noiseFloorRef.current = 0.008;
     calibrateUntilRef.current = Date.now() + 1000;
@@ -416,10 +423,17 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       try {
         let uploadBlob: Blob = rawBlob;
         let uploadName = 'recording.webm';
+        const trimStartSec = Math.max(0, ((firstSpeechAtMsRef.current ?? 0) - 350) / 1000);
+        const trimEndSec =
+          ((lastSpeechAtMsRef.current ?? recordedMs) + silenceMs + stopDelayMs + 200) / 1000;
         try {
-          uploadBlob = await encodeBlobTo16kMonoWav(rawBlob);
+          uploadBlob = await encodeBlobTo16kMonoWav(rawBlob, { trimStartSec, trimEndSec });
           uploadName = 'recording.wav';
-          console.log('[useVoiceRecorder] Encoded WAV size:', uploadBlob.size);
+          console.log('[useVoiceRecorder] Encoded trimmed WAV size:', uploadBlob.size, {
+            trimStartSec: trimStartSec.toFixed(2),
+            trimEndSec: trimEndSec.toFixed(2),
+            recordedMs,
+          });
         } catch (encodeErr) {
           console.warn('[useVoiceRecorder] WAV encode failed, sending original', encodeErr);
           uploadName =
@@ -511,6 +525,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
             if (speechStreakRef.current >= SPEECH_STREAK_FRAMES) {
               speechSeenRef.current = true;
               speechTotalMsRef.current += VAD_INTERVAL_MS;
+              if (firstSpeechAtMsRef.current == null) {
+                firstSpeechAtMsRef.current = recordedMs;
+              }
+              lastSpeechAtMsRef.current = recordedMs;
               if (idleNoSpeechTimeoutRef.current) {
                 window.clearTimeout(idleNoSpeechTimeoutRef.current);
                 idleNoSpeechTimeoutRef.current = null;

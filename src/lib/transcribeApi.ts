@@ -81,7 +81,7 @@ export async function transcribeAudio(
   };
 
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 240000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 120000);
 
   const urls = transcribeUrls();
   let lastError: Error | null = null;
