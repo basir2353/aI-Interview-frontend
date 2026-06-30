@@ -98,12 +98,15 @@ export const api = {
   },
 
   getState(interviewId: string) {
-    return request<InterviewState>(`/interview/${interviewId}/state`);
+    return request<InterviewState>(`/interview/${interviewId}/state`, {
+      headers: interviewAuthHeaders(interviewId),
+    });
   },
 
   beginLiveInterview(interviewId: string) {
     return request<BeginLiveInterviewResponse>(`/interview/${interviewId}/begin-live`, {
       method: 'POST',
+      headers: interviewAuthHeaders(interviewId),
     });
   },
 
