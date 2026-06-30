@@ -42,6 +42,8 @@ interface AudioRecorderProps {
   transcribeLanguage?: string;
   /** Allow mixed-language answers (e.g. Arabic + English). */
   transcribeMixed?: boolean;
+  /** Interview session id for STT audit trail. */
+  interviewId?: string;
 }
 
 function isNoSpeechError(message: string): boolean {
@@ -71,6 +73,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     onIdleTimeout,
     transcribeLanguage,
     transcribeMixed,
+    interviewId,
   },
   ref
 ) {
@@ -98,6 +101,7 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     onIdleTimeout,
     transcribeLanguage,
     transcribeMixed,
+    interviewId,
     onTranscript: (text) => {
       onTranscript(text);
     },

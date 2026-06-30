@@ -20,7 +20,7 @@ export const TTS_INTRO_TO_QUESTION_PAUSE_MS = 450;
 export const TTS_LIVE_ROOM_READY_MS = 40;
 
 /** Sustained silence after speech before auto-stop + transcribe (interview room). */
-export const INTERVIEW_SILENCE_AUTO_STOP_MS = 20_000;
+export const INTERVIEW_SILENCE_AUTO_STOP_MS = 2_200;
 
 /** Max time mic stays open with no detected speech before auto-stop + transcribe attempt. */
-export const INTERVIEW_NO_SPEECH_IDLE_MS = 20_000;
+export const INTERVIEW_NO_SPEECH_IDLE_MS = 15_000;

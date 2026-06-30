@@ -38,6 +38,8 @@ export interface UseVoiceRecorderOptions {
   transcribeLanguage?: string;
   /** Allow Arabic+English / Urdu+English code-switching on the server. */
   transcribeMixed?: boolean;
+  /** Interview session id — stored with transcription audit row on backend. */
+  interviewId?: string;
 }
 
 export interface UseVoiceRecorderReturn {
@@ -89,6 +91,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     onIdleTimeout,
     transcribeLanguage,
     transcribeMixed,
+    interviewId,
   } = options;
 
   const [status, setStatus] = useState<RecorderStatus>('idle');
@@ -429,6 +432,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         const { transcript } = await transcribeAudio(uploadBlob, uploadName, {
           language: transcribeLanguage,
           mixed: transcribeMixed,
+          interviewId,
         });
         const text = (transcript || '').trim();
         console.log('[useVoiceRecorder] Transcript:', text);
@@ -562,6 +566,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     silenceMs,
     stopDelayMs,
     stop,
+    interviewId,
   ]);
 
   useEffect(() => {

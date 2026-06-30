@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { api } from '@/lib/api';
+import { api, interviewErrorMessage, isRejectedVoiceCaptureError } from '@/lib/api';
 import type { InterviewState, InterviewReport, InterviewerPersona } from '@/types';
 import { AudioRecorder, type AudioRecorderHandle } from '@/components/AudioRecorder';
 import { VideoPreview } from '@/components/VideoPreview';
@@ -200,7 +200,7 @@ export default function LiveInterviewPage() {
     const isCodingTurn = Boolean(
       latestAi?.isCodingQuestion || latestAi?.codingStarterCode || latestAi?.codingLanguage
     );
-    if (!voiceEnabled || loading || pipelineBusyRef.current || isCodingTurn) return;
+    if (!voiceEnabled || loadingRef.current || pipelineBusyRef.current || isCodingTurn) return;
     if (userMutedRef.current && !opts?.userInitiated) return;
     if (introPlaybackActiveRef.current || interviewerSpeakingRef.current) return;
     if (voicePhaseRef.current === 'speaking') return;
@@ -262,7 +262,7 @@ export default function LiveInterviewPage() {
       audioRecorderRef.current?.cancel();
       clearAutoListenTimeout();
     }, listenWindowMs);
-  }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
+  }, [voiceEnabled, clearAutoListenTimeout, state]);
 
   /** After AI finishes speaking, open the mic for the candidate's turn. */
   const scheduleAutoListen = useCallback((opts?: { skipTtsDelay?: boolean }) => {
@@ -281,18 +281,20 @@ export default function LiveInterviewPage() {
         return;
       }
       if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
-        if (tryCount < 80) {
-          autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(tryCount + 1), 300);
+        if (tryCount < 120) {
+          autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(tryCount + 1), 250);
         } else {
           setAutoMicPending(false);
+          setError('Microphone did not open automatically. Tap the mic button below to answer.');
         }
         return;
       }
-      if (loadingRef.current || pipelineBusyRef.current) {
-        if (tryCount < 80) {
-          autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(tryCount + 1), 400);
+      if (loadingRef.current || pipelineBusyRef.current || submitInFlightRef.current) {
+        if (tryCount < 120) {
+          autoListenScheduleRef.current = setTimeout(() => attemptOpenMic(tryCount + 1), 300);
         } else {
           setAutoMicPending(false);
+          setError('Microphone did not open automatically. Tap the mic button below to answer.');
         }
         return;
       }
@@ -352,8 +354,7 @@ export default function LiveInterviewPage() {
         voicePhaseRef.current = 'idle';
         setVoicePhase('idle');
       }
-      if (introPlaybackActiveRef.current || loadingRef.current || pipelineBusyRef.current) return;
-      if (submitInFlightRef.current) return;
+      if (introPlaybackActiveRef.current || loadingRef.current || pipelineBusyRef.current || submitInFlightRef.current) return;
       if (voicePhaseRef.current === 'thinking' || voicePhaseRef.current === 'transcribing') return;
       if (!voiceEnabled || userMutedRef.current) return;
       scheduleAutoListen({ skipTtsDelay: introCompleteRef.current });
@@ -413,7 +414,9 @@ export default function LiveInterviewPage() {
       setIntroSpeaking(false);
       voicePhaseRef.current = 'idle';
       setVoicePhase('idle');
-      scheduleAutoListen();
+      if (!loadingRef.current && !submitInFlightRef.current) {
+        scheduleAutoListen();
+      }
     },
     skipTurnIds,
     lang: interviewLang,
@@ -598,6 +601,7 @@ export default function LiveInterviewPage() {
     if (roomPhase !== 'live' || !voiceEnabled || micOn || autoMicPending) return;
     if (loading || introSpeaking || pipelineWaiting) return;
     if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
+    if (submitInFlightRef.current || pipelineBusyRef.current) return;
     const lastAiTurn =
       [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro) ??
       [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
@@ -609,8 +613,10 @@ export default function LiveInterviewPage() {
 
     const timer = window.setTimeout(() => {
       if (micOn || autoListeningRef.current || userMutedRef.current || loadingRef.current) return;
+      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) return;
+      if (submitInFlightRef.current || pipelineBusyRef.current) return;
       scheduleAutoListen({ skipTtsDelay: true });
-    }, 2500);
+    }, 1800);
     return () => window.clearTimeout(timer);
   }, [
     roomPhase,
@@ -680,15 +686,17 @@ export default function LiveInterviewPage() {
       setAnswerText('');
       noSpeechRetryRef.current = 0;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to submit';
-      const isRejectedCapture = /interviewer|echo|no clear answer|invalid transcript|no speech/i.test(msg);
+      const msg = interviewErrorMessage(e, interviewLang);
+      const rejectedCapture = isRejectedVoiceCaptureError(e);
       setError(
-        isRejectedCapture
-          ? 'Please wait for the question to finish, then speak clearly for a few seconds before stopping.'
+        rejectedCapture
+          ? interviewLang === 'ur'
+            ? 'Sawal khatam hone ka intezar karein, phir saaf boliye — kam az kam 2-3 seconds.'
+            : 'Please wait for the question to finish, then speak clearly for a few seconds before stopping.'
           : msg
       );
       setVoicePhase('idle');
-      if (voiceEnabled && isRejectedCapture) {
+      if (voiceEnabled && rejectedCapture) {
         handleMicCaptureRejected('Could not use that recording.');
       } else if (voiceEnabled) {
         scheduleAutoListen();
@@ -698,7 +706,7 @@ export default function LiveInterviewPage() {
       pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, handleMicCaptureRejected, scheduleAutoListen, syncDisplayQuestionFromState]);
+  }, [audioRecorderRef, clearAutoListenTimeout, id, interviewLang, loadState, loading, stopSpeaking, voiceEnabled, handleMicCaptureRejected, scheduleAutoListen, syncDisplayQuestionFromState]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
@@ -708,28 +716,32 @@ export default function LiveInterviewPage() {
         return;
       }
 
-      if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current) {
+      const substantialTranscript = cleaned.length >= 24 || cleaned.split(/\s+/).filter(Boolean).length >= 5;
+      if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current && !substantialTranscript) {
         console.warn('[Interview] Ignoring transcript — no VAD speech detected (likely TTS echo)');
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
 
-      const interviewerTexts = collectInterviewerTexts(state?.turns, [
-        displayQuestion,
-        interviewerCaption,
-      ]);
+      const currentQuestionText =
+        displayQuestion.trim() ||
+        [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai' && !t.isIntro)?.content?.trim() ||
+        '';
+      const echoSources = currentQuestionText
+        ? [currentQuestionText, interviewerCaption.trim()].filter(Boolean)
+        : collectInterviewerTexts(state?.turns, [displayQuestion, interviewerCaption]);
       // Only block obvious echo/hallucination — backend validates again on submit.
       if (
-        isLikelyInterviewerEcho(cleaned, interviewerTexts, interviewLang) &&
-        cleaned.length < 80
+        isLikelyInterviewerEcho(cleaned, echoSources, interviewLang) &&
+        cleaned.length < 120
       ) {
         console.warn('[Interview] Ignoring likely TTS echo', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
-      if (isSttHallucination(cleaned, interviewLang)) {
+      if (isSttHallucination(cleaned, interviewLang) && !substantialTranscript) {
         console.warn('[Interview] Ignoring STT hallucination', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
@@ -809,15 +821,20 @@ export default function LiveInterviewPage() {
     if (recorder?.busy && !recorder?.listening) return;
     const micActive = micOn || autoListeningRef.current || autoMicPending || recorder?.listening;
     if (micActive) {
-      userMutedRef.current = true;
       autoListeningRef.current = false;
       setAutoMicPending(false);
       idleStopRef.current = false;
       if (recorder?.listening) {
-        recorder.cancel();
-      } else {
-        recorder?.cancel();
+        userMutedRef.current = false;
+        recorder.stop();
+        setMicOn(false);
+        setVoicePhase('transcribing');
+        voicePhaseRef.current = 'transcribing';
+        setError('');
+        return;
       }
+      userMutedRef.current = true;
+      recorder?.cancel();
       setMicOn(false);
       setVoicePhase('idle');
       voicePhaseRef.current = 'idle';
@@ -827,7 +844,7 @@ export default function LiveInterviewPage() {
     userMutedRef.current = false;
     noSpeechRetryRef.current = 0;
     userInitiatedMicRef.current = true;
-    if (loading || pipelineBusyRef.current) return;
+    if (loadingRef.current || pipelineBusyRef.current) return;
     startAutoListeningWindow({ userInitiated: true });
   };
 
@@ -1056,6 +1073,12 @@ export default function LiveInterviewPage() {
             } else {
               setLiveCaption('');
               setDisplayQuestion(text);
+            }
+          },
+          onEnd: () => {
+            if (cancelled) return;
+            if (!duringIntro && !introCompleteRef.current) {
+              scheduleAutoListenRef.current({ skipTtsDelay: true });
             }
           },
         });
@@ -1334,6 +1357,7 @@ export default function LiveInterviewPage() {
   const voiceRecorderNode = (
     <AudioRecorder
       ref={audioRecorderRef}
+      interviewId={id}
       transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
       transcribeMixed={sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang))}
       onTranscript={handleVoiceTranscript}
@@ -1352,23 +1376,32 @@ export default function LiveInterviewPage() {
         setMicOn(false);
         setVoicePhase('idle');
         if (/no audio detected|empty recording|no speech/i.test(msg)) {
-          handleMicCaptureRejected('I did not catch that.');
+          handleMicCaptureRejected(
+            interviewLang === 'ur' ? 'Aap ki awaaz clear nahi aayi.' : 'I did not catch that.'
+          );
           return;
         }
         setError(
           msg.includes('timed out')
-            ? 'Transcription took too long. Please try again.'
-            : 'Transcription failed. Tap the mic icon to try again.'
+            ? interviewLang === 'ur'
+              ? 'Transcription mein waqt zyada lag gaya. Dobara koshish karein.'
+              : 'Transcription took too long. Please try again.'
+            : interviewLang === 'ur'
+              ? 'Transcription fail ho gayi. Neeche mic button dabayein.'
+              : 'Transcription failed. Tap the mic icon to try again.'
         );
+        if (voiceEnabled) {
+          window.setTimeout(() => scheduleAutoListen({ skipTtsDelay: true }), 600);
+        }
       }}
       silenceMs={INTERVIEW_SILENCE_AUTO_STOP_MS}
-      minRecordMs={800}
-      minSpeechMs={400}
-      minTranscribeMs={800}
-      minSpeechMsForTranscribe={500}
+      minRecordMs={600}
+      minSpeechMs={300}
+      minTranscribeMs={700}
+      minSpeechMsForTranscribe={400}
       disableAdaptiveVad={false}
       autoStopOnSilence
-      stopDelayMs={400}
+      stopDelayMs={350}
       maxRecordMs={120000}
       noSpeechIdleMs={INTERVIEW_NO_SPEECH_IDLE_MS}
       onIdleTimeout={handleMicIdleTimeout}

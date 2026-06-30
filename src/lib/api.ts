@@ -13,6 +13,9 @@ import type {
   SubmitAnswerResponse,
   BeginLiveInterviewResponse,
 } from '@/types';
+import { ApiClientError, parseApiErrorPayload } from '@/lib/apiErrors';
+
+export { ApiClientError, interviewErrorMessage, isRejectedVoiceCaptureError } from '@/lib/apiErrors';
 
 // Use same-origin proxy so the browser never hits :4000 directly (avoids ERR_CONNECTION_REFUSED).
 // Next.js api/proxy/[...path] forwards to the backend; if backend is down you get a clear 503 message.
@@ -66,8 +69,10 @@ async function request<T>(
     headers,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error || res.statusText);
+    const errBody = await res.json().catch(() => ({} as Record<string, unknown>));
+    const apiErr = parseApiErrorPayload(errBody, res.statusText);
+    apiErr.status = res.status;
+    throw apiErr;
   }
   return res.json() as Promise<T>;
 }
