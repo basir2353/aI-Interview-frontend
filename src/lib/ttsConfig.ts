@@ -11,7 +11,7 @@ export const TTS_TURN_START_DELAY_MS = 40;
 export const TTS_AFTER_SPEAK_MIC_DELAY_MS = 1800;
 
 /** Shorter guard when TTS already finished (intro / manual speak path). */
-export const TTS_POST_SPEECH_MIC_DELAY_MS = 500;
+export const TTS_POST_SPEECH_MIC_DELAY_MS = 1500;
 
 /** Pause between intro block and first question. */
 export const TTS_INTRO_TO_QUESTION_PAUSE_MS = 450;
