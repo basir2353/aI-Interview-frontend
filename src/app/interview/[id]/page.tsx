@@ -550,7 +550,10 @@ export default function LiveInterviewPage() {
     setCodeNotes('');
   }, [state]);
 
-  const submitAnswerText = useCallback(async (rawText: string) => {
+  const submitAnswerText = useCallback(async (
+    rawText: string,
+    extras?: { codeContent?: string; explanationText?: string; codeLanguage?: string }
+  ) => {
     const text = rawText.trim();
     if (!text || loading || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
@@ -573,7 +576,7 @@ export default function LiveInterviewPage() {
     setError('');
     setLoading(true);
     try {
-      const res = await api.submitAnswer(id, text);
+      const res = await api.submitAnswer(id, text, extras);
       if (res.report) {
         setReport(res.report);
         setState(null);
@@ -687,14 +690,10 @@ export default function LiveInterviewPage() {
     const lastAiTurn = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
     const language = (lastAiTurn?.codingLanguage || 'javascript').toLowerCase();
     const note = codeNotes.trim();
-    const formatted = [
-      `Coding solution (${language}):`,
-      `\`\`\`${language}\n${solution}\n\`\`\``,
-      note ? `Explanation:\n${note}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n');
-    void submitAnswerText(formatted);
+    void submitAnswerText(
+      note ? `Explanation:\n${note}` : 'Coding solution submitted.',
+      { codeContent: solution, explanationText: note || undefined, codeLanguage: language }
+    );
   };
 
   const handleEndInterview = async () => {

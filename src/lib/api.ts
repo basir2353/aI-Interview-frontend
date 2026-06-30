@@ -25,6 +25,23 @@ const getBase = () => {
   return origin.replace(/\/$/, '') + '/api/v1';
 };
 
+const SESSION_TOKEN_KEY_PREFIX = 'intervion_session_token_';
+
+export function setInterviewSessionToken(interviewId: string, token: string): void {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(`${SESSION_TOKEN_KEY_PREFIX}${interviewId}`, token);
+}
+
+export function getInterviewSessionToken(interviewId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.sessionStorage.getItem(`${SESSION_TOKEN_KEY_PREFIX}${interviewId}`);
+}
+
+function interviewAuthHeaders(interviewId: string): HeadersInit {
+  const token = getInterviewSessionToken(interviewId);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(
   path: string,
   options: RequestInit & { params?: Record<string, string> } = {}
@@ -63,10 +80,15 @@ export const api = {
     });
   },
 
-  submitAnswer(interviewId: string, answerText: string) {
+  submitAnswer(
+    interviewId: string,
+    answerText: string,
+    extras?: { codeContent?: string; explanationText?: string; codeLanguage?: string }
+  ) {
     return request<SubmitAnswerResponse>(`/interview/${interviewId}/answer`, {
       method: 'POST',
-      body: JSON.stringify({ answerText }),
+      headers: interviewAuthHeaders(interviewId),
+      body: JSON.stringify({ answerText, ...extras }),
     });
   },
 
@@ -81,9 +103,13 @@ export const api = {
   },
 
   endInterview(interviewId: string) {
-    return request<{ ended: boolean; report?: InterviewReport }>(`/interview/${interviewId}/end`, {
-      method: 'POST',
-    });
+    return request<{ ended: boolean; report?: InterviewReport; reportStatus?: string }>(
+      `/interview/${interviewId}/end`,
+      {
+        method: 'POST',
+        headers: interviewAuthHeaders(interviewId),
+      }
+    );
   },
 
   getReport(interviewId: string) {
@@ -971,6 +997,7 @@ export interface PublicJoinInfo {
 export interface PublicJoinStartResponse {
   interviewId: string;
   state: InterviewState;
+  sessionToken: string;
   alreadyStarted?: boolean;
   firstReply?: string;
 }

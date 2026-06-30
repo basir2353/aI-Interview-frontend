@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '@/lib/api';
+import { api, setInterviewSessionToken } from '@/lib/api';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
 import { useInterviewRoomTheme } from '@/hooks/useInterviewRoomTheme';
 
@@ -31,6 +31,9 @@ export default function InterviewEnterPage() {
       const res = await api.publicStartJoin(token);
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem('interviewBeginLive', '1');
+        if (res.sessionToken) {
+          setInterviewSessionToken(res.interviewId, res.sessionToken);
+        }
       }
       router.replace(`/interview/${res.interviewId}`);
     } catch (e) {

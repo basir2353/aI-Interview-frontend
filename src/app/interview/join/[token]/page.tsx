@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api, type PublicJoinInfo } from '@/lib/api';
+import { api, setInterviewSessionToken, type PublicJoinInfo } from '@/lib/api';
 import { AppShell } from '@/components/layout/AppShell';
 import { IntervionLogo } from '@/components/ui/IntervionLogo';
 
@@ -27,13 +27,21 @@ export default function JoinInterviewPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const goToInterviewRoom = () => {
+  const goToInterviewRoom = async () => {
     if (!token) return;
     if (info?.interviewId && info.status === 'in_progress') {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem('interviewBeginLive', '1');
+      try {
+        const res = await api.publicStartJoin(token);
+        if (typeof window !== 'undefined') {
+          window.sessionStorage.setItem('interviewBeginLive', '1');
+          if (res.sessionToken) {
+            setInterviewSessionToken(res.interviewId, res.sessionToken);
+          }
+        }
+        router.push(`/interview/${res.interviewId}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to resume interview');
       }
-      router.push(`/interview/${info.interviewId}`);
       return;
     }
     router.push(`/interview/enter/${token}`);

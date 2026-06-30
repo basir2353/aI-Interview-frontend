@@ -102,11 +102,13 @@ export interface InterviewReport {
   strengths: string[];
   improvements: string[];
   questionAnswerSummary: { question: string; answer: string; score: number }[];
+  reportStatus?: 'draft' | 'finalized';
 }
 
 export interface StartInterviewResponse {
   interviewId: string;
   state: InterviewState;
+  sessionToken?: string;
   firstReply?: string;
   /** Talking-head video URL for firstReply when avatar pipeline is enabled. */
   avatarVideo?: string;
