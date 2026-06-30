@@ -175,25 +175,36 @@ export default function LiveInterviewPage() {
     micEligibleAfterRef.current = Date.now() + TTS_AFTER_SPEAK_MIC_DELAY_MS;
   }, []);
 
-  const startAutoListeningWindow = useCallback(() => {
+  const startAutoListeningWindow = useCallback((opts?: { userInitiated?: boolean }) => {
     const latestAi = [...(state?.turns ?? [])].reverse().find((t) => t.role === 'ai');
     const isCodingTurn = Boolean(
       latestAi?.isCodingQuestion || latestAi?.codingStarterCode || latestAi?.codingLanguage
     );
     if (!voiceEnabled || loading || pipelineBusyRef.current || isCodingTurn) return;
-    if (userMutedRef.current) return;
+    if (userMutedRef.current && !opts?.userInitiated) return;
     if (introPlaybackActiveRef.current || interviewerSpeakingRef.current) return;
     if (voicePhaseRef.current === 'speaking') return;
     if (audioRecorderRef.current?.busy) return;
     if (audioRecorderRef.current?.listening) return;
-    if (Date.now() < micEligibleAfterRef.current) return;
+    if (!opts?.userInitiated && Date.now() < micEligibleAfterRef.current) return;
     clearAutoListenTimeout();
     audioRecorderRef.current?.cancel();
     autoListeningRef.current = true;
-    userInitiatedMicRef.current = false;
+    if (opts?.userInitiated) {
+      userInitiatedMicRef.current = true;
+    } else {
+      userInitiatedMicRef.current = false;
+    }
 
     const tryStartMic = async (attempt = 0) => {
-      if (!autoListeningRef.current || userMutedRef.current) return;
+      if (!autoListeningRef.current && !opts?.userInitiated) return;
+      if (userMutedRef.current && !opts?.userInitiated) return;
+      if (interviewerSpeakingRef.current || introPlaybackActiveRef.current) {
+        if (attempt < 40) {
+          window.setTimeout(() => void tryStartMic(attempt + 1), 300);
+        }
+        return;
+      }
       if (audioRecorderRef.current?.busy) {
         if (attempt < 60) {
           window.setTimeout(() => void tryStartMic(attempt + 1), 500);
@@ -205,16 +216,19 @@ export default function LiveInterviewPage() {
         await new Promise((r) => window.setTimeout(r, 100));
       }
       if (started && audioRecorderRef.current?.listening) {
+        setMicOn(true);
+        setVoicePhase('listening');
+        setError('');
         return;
       }
-      if (attempt < 12) {
+      if (attempt < 20) {
         window.setTimeout(() => void tryStartMic(attempt + 1), 400);
         return;
       }
       autoListeningRef.current = false;
       setMicOn(false);
       setVoicePhase('idle');
-      setError('Could not open the microphone. Please click the mic button or check browser permissions.');
+      setError('Could not open the microphone. Tap the mic button below or check browser permissions.');
     };
 
     void tryStartMic();
@@ -228,9 +242,13 @@ export default function LiveInterviewPage() {
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
 
   /** After AI finishes speaking, open the mic for the candidate's turn. */
-  const scheduleAutoListen = useCallback(() => {
+  const scheduleAutoListen = useCallback((opts?: { skipTtsDelay?: boolean }) => {
     if (userMutedRef.current || loadingRef.current || pipelineBusyRef.current) return;
-    markMicEligibleAfterTts();
+    if (!opts?.skipTtsDelay) {
+      markMicEligibleAfterTts();
+    } else {
+      micEligibleAfterRef.current = Date.now();
+    }
     clearAutoListenTimeout();
     const waitMs = Math.max(0, micEligibleAfterRef.current - Date.now());
     autoListenScheduleRef.current = setTimeout(() => {
@@ -324,7 +342,6 @@ export default function LiveInterviewPage() {
   const { stopSpeaking, markTurnSpoken } = useInterviewerVoice(state?.turns, voiceAutoPlayActive, {
     onSpeakText: handleAiSpeakText,
     onAutoSpeakStart: () => {
-      micEligibleAfterRef.current = Date.now() + 120_000;
       cancelHumanSpeechRef.current();
       clearAutoListenTimeout();
       autoListeningRef.current = false;
@@ -332,6 +349,7 @@ export default function LiveInterviewPage() {
       audioRecorderRef.current?.cancel();
       setMicOn(false);
       setVoicePhase('speaking');
+      voicePhaseRef.current = 'speaking';
     },
     onAutoSpeakEnd: () => {
       if (introPlaybackActiveRef.current) return;
@@ -600,9 +618,6 @@ export default function LiveInterviewPage() {
       }
 
       if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current) {
-        // #region agent log
-        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:reject-no-vad',message:'transcript rejected',data:{reason:'no_vad',textLen:cleaned.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.warn('[Interview] Ignoring transcript — no VAD speech detected (likely TTS echo)');
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
@@ -618,27 +633,17 @@ export default function LiveInterviewPage() {
         isLikelyInterviewerEcho(cleaned, interviewerTexts, interviewLang) &&
         cleaned.length < 80
       ) {
-        // #region agent log
-        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:reject-echo',message:'transcript rejected',data:{reason:'echo',textLen:cleaned.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.warn('[Interview] Ignoring likely TTS echo', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
       if (isSttHallucination(cleaned, interviewLang)) {
-        // #region agent log
-        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:reject-hallucination',message:'transcript rejected',data:{reason:'hallucination',textLen:cleaned.length},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.warn('[Interview] Ignoring STT hallucination', { preview: cleaned.slice(0, 80) });
         pipelineBusyRef.current = false;
         handleMicCaptureRejected('That did not sound like a real answer.');
         return;
       }
-
-      // #region agent log
-      fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'C',location:'page.tsx:accept',message:'transcript accepted submitting',data:{textLen:cleaned.length,hadSpeech:lastClipHadSpeechRef.current,userMic:userInitiatedMicRef.current},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       setMicOn(false);
       setVoicePhase('thinking');
@@ -734,7 +739,7 @@ export default function LiveInterviewPage() {
     noSpeechRetryRef.current = 0;
     userInitiatedMicRef.current = true;
     if (loading || pipelineBusyRef.current) return;
-    startAutoListeningWindow();
+    startAutoListeningWindow({ userInitiated: true });
   };
 
   const handleCameraToggle = () => {

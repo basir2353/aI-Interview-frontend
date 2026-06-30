@@ -20,9 +20,13 @@ function filenameForBlob(blob: Blob): string {
   return 'recording.webm';
 }
 
-/** Call same-origin proxy so transcription works reliably from the interview page. */
+/** Call backend directly in production — Vercel /api/transcribe caps at ~60s; Whisper on CPU can take longer. */
 function transcribeUrl(): string {
   if (typeof window !== 'undefined') {
+    const origin = getBackendOrigin();
+    if (origin && !/localhost|127\.0\.0\.1/i.test(origin)) {
+      return `${origin}/api/v1/transcribe`;
+    }
     return '/api/transcribe';
   }
   return `${getBackendOrigin()}/api/v1/transcribe`;
@@ -47,11 +51,6 @@ export async function transcribeAudio(
 
   let response: Response;
   const url = transcribeUrl();
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'B',location:'transcribeApi.ts:request',message:'transcribe request start',data:{url,fileBytes:file.size,language:options?.language,mixed:options?.mixed},timestamp:Date.now()})}).catch(()=>{});
-  }
-  // #endregion
   try {
     response = await fetch(url, {
       method: 'POST',
@@ -70,11 +69,6 @@ export async function transcribeAudio(
   window.clearTimeout(timeoutId);
 
   const payload = await response.json().catch(() => ({} as Record<string, unknown>));
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'B',location:'transcribeApi.ts:response',message:'transcribe response',data:{status:response.status,ok:response.ok,hasTranscript:typeof payload.transcript==='string',error:typeof payload.error==='string'?payload.error.slice(0,80):undefined},timestamp:Date.now()})}).catch(()=>{});
-  }
-  // #endregion
   if (!response.ok) {
     const errorMessage =
       typeof payload.error === 'string' && payload.error.trim()

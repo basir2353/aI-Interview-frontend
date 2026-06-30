@@ -122,9 +122,9 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
   }, [disabled, isBusy, isRecording, startVoice, stopVoice]);
 
   const start = useCallback(async (): Promise<boolean> => {
-    if (disabled || isBusy) return isRecording;
+    if (disabled || isBusy) return false;
     return startVoice();
-  }, [disabled, isBusy, isRecording, startVoice]);
+  }, [disabled, isBusy, startVoice]);
 
   const stop = useCallback(() => {
     if (!isRecording) return;
@@ -160,7 +160,9 @@ export const AudioRecorder = forwardRef<AudioRecorderHandle, AudioRecorderProps>
     [toggle, start, stop, cancel, warmUp, isRecording, isBusy, isProcessing]
   );
 
-  if (hideButton) return null;
+  if (hideButton) {
+    return <span className="sr-only" aria-hidden data-audio-recorder="" />;
+  }
 
   return (
     <button

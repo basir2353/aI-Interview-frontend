@@ -321,17 +321,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
       const recordedMs = Date.now() - startedAtRef.current;
       const speechMs = speechTotalMsRef.current;
 
-      // #region agent log
-      fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'A',location:'useVoiceRecorder.ts:onstop',message:'recording stopped',data:{speechMs,recordedMs,hadSpeech,speechSeen:speechSeenRef.current,minSpeechMsForTranscribe,blobSize:rawBlob.size,autoStopOnSilence},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-
       // Auto-interview mode: never transcribe without real VAD speech (blocks TTS speaker echo).
       if (autoStopOnSilence) {
         if (!speechSeenRef.current || speechMs < minSpeechMsForTranscribe) {
           const msg = 'No audio detected (no speech)';
-          // #region agent log
-          fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'A',location:'useVoiceRecorder.ts:vad-block',message:'blocked before transcribe',data:{reason:'no_speech',speechMs,minSpeechMsForTranscribe},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           processingRef.current = false;
           setStatus('error');
           setError(msg);
@@ -395,10 +388,6 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         const text = (transcript || '').trim();
         console.log('[useVoiceRecorder] Transcript:', text);
 
-        // #region agent log
-        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'B',location:'useVoiceRecorder.ts:transcribe-ok',message:'transcribe succeeded',data:{textLen:text.length,uploadName,uploadBytes:uploadBlob.size,lang:transcribeLanguage,mixed:transcribeMixed},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-
         if (!text) {
           const msg = 'Empty transcript returned';
           processingRef.current = false;
@@ -414,9 +403,6 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         onTranscript?.(text);
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Transcription failed';
-        // #region agent log
-        fetch('http://127.0.0.1:7530/ingest/ee56d647-5188-40ec-8a57-6399ff156f08',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'92a442'},body:JSON.stringify({sessionId:'92a442',hypothesisId:'B',location:'useVoiceRecorder.ts:transcribe-err',message:'transcribe failed',data:{error:msg},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         console.error('[useVoiceRecorder] Transcription pipeline error', e);
         processingRef.current = false;
         setStatus('error');
