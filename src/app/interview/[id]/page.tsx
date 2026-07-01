@@ -162,6 +162,11 @@ export default function LiveInterviewPage() {
     onTranscriptReady,
   } = voiceLoop;
 
+  const autoMicPendingRef = useRef(autoMicPending);
+  useEffect(() => {
+    autoMicPendingRef.current = autoMicPending;
+  }, [autoMicPending]);
+
   useEffect(() => {
     interviewLangRef.current = interviewLang;
   }, [interviewLang]);
@@ -274,9 +279,7 @@ export default function LiveInterviewPage() {
       ? 'thinking'
       : introSpeaking
         ? 'speaking'
-        : voicePhase === 'listening' && !micOn
-          ? 'idle'
-          : voicePhase;
+        : voicePhase;
 
   const pipelineWaiting =
     roomPhase === 'live' &&
@@ -306,7 +309,7 @@ export default function LiveInterviewPage() {
       ? 'speaking'
       : micOn
         ? 'listening'
-        : autoMicPending
+        : autoMicPending || (voicePhase === 'listening' && !micOn)
           ? 'openingMic'
           : pipelineWaiting
             ? 'thinking'
@@ -750,7 +753,8 @@ export default function LiveInterviewPage() {
 
     const finishIntroAndOpenMic = (questionTurnId?: string, questionText?: string) => {
       if (introCompleteRef.current) {
-        if (!audioRecorderRef.current?.listening) {
+        const recorder = audioRecorderRef.current;
+        if (!recorder?.listening && !autoMicPendingRef.current && !recorder?.busy) {
           onIntroQuestionReadyRef.current();
         }
         return;

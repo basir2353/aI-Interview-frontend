@@ -104,13 +104,24 @@ export function useInterviewVoiceLoop({
     return true;
   }, [introPlaybackActiveRef]);
 
+  /** Cancel a pending mic-open timer without invalidating an in-flight openMic(). */
+  const cancelPendingMicOpen = useCallback(() => {
+    clearTimers();
+    setAutoMicPending(false);
+  }, [clearTimers]);
+
   const closeMic = useCallback(
     (cancelRecording = true) => {
-      bumpGeneration();
+      const recorder = audioRecorderRef.current;
+      const invalidateOpen =
+        cancelRecording ||
+        micOnRef.current ||
+        autoListeningRef.current ||
+        Boolean(recorder?.listening);
+      if (invalidateOpen) bumpGeneration();
       clearTimers();
       autoListeningRef.current = false;
       setAutoMicPending(false);
-      const recorder = audioRecorderRef.current;
       if (cancelRecording && !transcribingRef.current && !submittingRef.current && !recorder?.processing) {
         recorder?.cancel();
       }
@@ -191,7 +202,11 @@ export function useInterviewVoiceLoop({
       }
 
       if (!canAutoOpen()) {
-        if (attempt < 20) {
+        if (phaseRef.current === 'speaking') {
+          setAutoMicPending(false);
+          return;
+        }
+        if (attempt < 8) {
           retryTimerRef.current = setTimeout(() => tryOpenWithRetry(gen, attempt + 1), 300);
         } else {
           setAutoMicPending(false);
@@ -216,17 +231,26 @@ export function useInterviewVoiceLoop({
     (delayMs: number = TTS_POST_SPEECH_MIC_DELAY_MS) => {
       if (!voiceEnabledRef.current) return;
       if (transcribingRef.current || submittingRef.current) return;
+      if (phaseRef.current === 'speaking') return;
       const recorder = audioRecorderRef.current;
       if (recorder?.listening || recorder?.processing) return;
-      bumpGeneration();
+      if (micOnRef.current) return;
+      if (openTimerRef.current != null) return;
+
+      if (autoListeningRef.current) bumpGeneration();
       clearTimers();
       const gen = openGenerationRef.current;
       setAutoMicPending(true);
       setCaptureError('');
 
       openTimerRef.current = setTimeout(() => {
+        openTimerRef.current = null;
         if (gen !== openGenerationRef.current) return;
         if (transcribingRef.current || submittingRef.current) return;
+        if (phaseRef.current === 'speaking') {
+          setAutoMicPending(false);
+          return;
+        }
         tryOpenWithRetry(gen, 0);
       }, Math.max(0, delayMs));
     },
@@ -247,14 +271,20 @@ export function useInterviewVoiceLoop({
 
     if (recorder?.listening) {
       autoListeningRef.current = false;
+      bumpGeneration();
       recorder.stop();
+      setMicOn(false);
     } else {
-      closeMic(false);
+      cancelPendingMicOpen();
+      if (autoListeningRef.current) {
+        bumpGeneration();
+        autoListeningRef.current = false;
+      }
     }
     setVoicePhase('speaking');
     phaseRef.current = 'speaking';
     noSpeechRetryRef.current = 0;
-  }, [audioRecorderRef, clearTimers, closeMic]);
+  }, [audioRecorderRef, bumpGeneration, cancelPendingMicOpen, clearTimers]);
 
   const onInterviewerSpeakEnd = useCallback(() => {
     if (introPlaybackActiveRef.current) return;
