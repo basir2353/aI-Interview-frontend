@@ -51,10 +51,6 @@ export default function LiveInterviewPage() {
   const [cameraOn, setCameraOn] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
   const [nowTs, setNowTs] = useState(Date.now());
-  /** When user has finished speaking: submit immediately for natural, efficient flow */
-  const [pendingAnswer, setPendingAnswer] = useState<string | null>(null);
-  const [countdownRemaining, setCountdownRemaining] = useState(0);
-  const [cameraUserIdle, setCameraUserIdle] = useState(false);
   const [activeTab, setActiveTab] = useState<'interview' | 'code' | 'notepad'>('interview');
   const [waveMessageShown, setWaveMessageShown] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
@@ -89,13 +85,9 @@ export default function LiveInterviewPage() {
   const screenVideoRef = useRef<HTMLVideoElement>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
   const submitInFlightRef = useRef(false);
-  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pendingAnswerRef = useRef<string | null>(null);
-  const cameraAnalysisFrameRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
   const lastCodingQuestionIdRef = useRef<string | null>(null);
   const endedByUnloadRef = useRef(false);
   const prefetchedLiveStateRef = useRef<InterviewState | null>(null);
-  const [interviewerCaption, setInterviewerCaption] = useState('');
   const submitAnswerRef = useRef<
     (text: string, extras?: { codeContent?: string; explanationText?: string; codeLanguage?: string }) => Promise<void>
   >(async () => undefined);
@@ -125,7 +117,6 @@ export default function LiveInterviewPage() {
     turns: state?.turns,
     loading,
     displayQuestion,
-    interviewerCaption,
     sttLanguage: sttLanguageForInterview(normalizeInterviewLanguage(interviewLang)),
     sttMixed: sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang)),
     interviewerFirstName: interviewerPersona === 'zara' ? 'ZaraAlex' : 'Ethan',
@@ -217,16 +208,11 @@ export default function LiveInterviewPage() {
   const engagementMessage = useInterviewEngagement(pipelineWaiting, interviewLang);
 
   const voiceStatusDetail =
-    interviewerCaption ||
-    (pipelineWaiting && engagementMessage
+    pipelineWaiting && engagementMessage
       ? engagementMessage
       : loading && answerText
         ? `"${answerText.slice(0, 120)}${answerText.length > 120 ? '…' : ''}"`
-        : countdownRemaining > 0
-          ? `Next question in ${countdownRemaining}s`
-          : micOn
-            ? undefined
-            : undefined);
+        : undefined;
 
   const loadState = useCallback(async () => {
     if (!id) return;
@@ -282,20 +268,6 @@ export default function LiveInterviewPage() {
   }, [state, roomPhase, introComplete, syncDisplayQuestionFromState]);
 
   useEffect(() => {
-    if (!state?.turns) return;
-    const aiTurns = state.turns.filter((t) => t.role === 'ai');
-    const introTurns = aiTurns.filter((t) => t.isIntro);
-    const questionTurn = aiTurns.find((t) => !t.isIntro);
-    console.log('[Intro] State turns', {
-      total: state.turns.length,
-      aiTurns: aiTurns.length,
-      introBeats: introTurns.length,
-      hasQuestion: Boolean(questionTurn),
-      welcomeDelivered: state.welcomeDelivered,
-    });
-  }, [state?.turns, state?.welcomeDelivered]);
-
-  useEffect(() => {
     if (!state) return;
     const lastAi = [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
     const isCodingTurn = Boolean(lastAi?.isCodingQuestion || lastAi?.codingStarterCode || lastAi?.codingLanguage);
@@ -322,13 +294,6 @@ export default function LiveInterviewPage() {
     const text = rawText.trim();
     if (!text || loading || submitInFlightRef.current) return;
     submitInFlightRef.current = true;
-    setPendingAnswer(null);
-    setCountdownRemaining(0);
-    pendingAnswerRef.current = null;
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
     setError('');
     setCaptureError('');
     setLoading(true);
@@ -522,10 +487,6 @@ export default function LiveInterviewPage() {
   useEffect(() => {
     return () => {
       stopAll();
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-        countdownIntervalRef.current = null;
-      }
       screenStreamRef.current?.getTracks().forEach((t) => t.stop());
       screenStreamRef.current = null;
     };
@@ -550,64 +511,6 @@ export default function LiveInterviewPage() {
       window.removeEventListener('pagehide', endInterviewOnLeave);
     };
   }, [id]);
-
-  // Camera-based idle detection while waiting before next question
-  useEffect(() => {
-    if (!pendingAnswer || !cameraOn || !cameraVideoRef.current) return;
-    const video = cameraVideoRef.current;
-    if (video.readyState < 2) return; // HAVE_CURRENT_DATA or more
-    const w = 40;
-    const h = 30;
-    let canvas: HTMLCanvasElement | null = null;
-    let ctx: CanvasRenderingContext2D | null = null;
-    let lastPixels: Uint8ClampedArray | null = null;
-    let idleFrames = 0;
-    const IDLE_FRAMES_NEEDED = 10; // ~1s at 10fps
-    const MOTION_THRESHOLD = 8;
-
-    const SAMPLE_MS = 150;
-    const tick = () => {
-      if (!video.videoWidth || !pendingAnswerRef.current) return;
-      try {
-        if (!canvas) {
-          canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          ctx = canvas.getContext('2d');
-        }
-        if (!ctx) return;
-        ctx.drawImage(video, 0, 0, w, h);
-        const imageData = ctx.getImageData(0, 0, w, h);
-        const pixels = imageData.data;
-        if (lastPixels) {
-          let diff = 0;
-          for (let i = 0; i < pixels.length; i += 4) {
-            diff += Math.abs(pixels[i]! - lastPixels[i]!);
-            diff += Math.abs(pixels[i + 1]! - lastPixels[i + 1]!);
-            diff += Math.abs(pixels[i + 2]! - lastPixels[i + 2]!);
-          }
-          const meanDiff = diff / (pixels.length / 4);
-          if (meanDiff < MOTION_THRESHOLD) {
-            idleFrames += 1;
-            if (idleFrames >= IDLE_FRAMES_NEEDED) setCameraUserIdle(true);
-          } else {
-            idleFrames = 0;
-          }
-        }
-        lastPixels = new Uint8ClampedArray(pixels);
-      } catch {
-        // ignore
-      }
-      cameraAnalysisFrameRef.current = window.setTimeout(tick, SAMPLE_MS);
-    };
-    cameraAnalysisFrameRef.current = window.setTimeout(tick, SAMPLE_MS);
-    return () => {
-      if (cameraAnalysisFrameRef.current) {
-        clearTimeout(cameraAnalysisFrameRef.current);
-        cameraAnalysisFrameRef.current = null;
-      }
-    };
-  }, [pendingAnswer, cameraOn]);
 
   if (report) {
     return (
@@ -660,14 +563,9 @@ export default function LiveInterviewPage() {
     ?? [...(state.turns ?? [])].reverse().find((t) => t.role === 'ai');
   const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
   const currentQuestion = displayQuestion || 'Getting your interview ready…';
-  const panelLabel = interviewerCaption
-    ? 'Interviewer'
-    : voicePhase === 'speaking' && introSpeaking
-      ? 'Introduction'
-      : 'Current question';
-  const panelText =
-    interviewerCaption ||
-    (voicePhase === 'speaking' && liveCaption ? liveCaption : currentQuestion);
+  const panelLabel =
+    voicePhase === 'speaking' && introSpeaking ? 'Introduction' : 'Current question';
+  const panelText = voicePhase === 'speaking' && liveCaption ? liveCaption : currentQuestion;
   const codingTurnActive = Boolean(
     lastAiTurn?.isCodingQuestion || lastAiTurn?.codingStarterCode || lastAiTurn?.codingLanguage
   );

@@ -27,7 +27,6 @@ export interface UseLiveInterviewVoiceOptions {
   turns: Turn[] | undefined;
   loading: boolean;
   displayQuestion: string;
-  interviewerCaption: string;
   sttLanguage: string;
   sttMixed: boolean;
   interviewerFirstName: string;
@@ -68,7 +67,6 @@ export function useLiveInterviewVoice({
   turns,
   loading,
   displayQuestion,
-  interviewerCaption,
   sttLanguage,
   sttMixed,
   interviewerFirstName,
@@ -111,7 +109,6 @@ export function useLiveInterviewVoice({
   const personaRef = useRef(persona);
   const turnsRef = useRef(turns);
   const displayQuestionRef = useRef(displayQuestion);
-  const captionRef = useRef(interviewerCaption);
 
   const onSubmitAnswerRef = useRef(onSubmitAnswer);
   const scheduleMicOpenRef = useRef<(delay?: number) => void>(() => undefined);
@@ -140,9 +137,6 @@ export function useLiveInterviewVoice({
   useEffect(() => {
     displayQuestionRef.current = displayQuestion;
   }, [displayQuestion]);
-  useEffect(() => {
-    captionRef.current = interviewerCaption;
-  }, [interviewerCaption]);
   useEffect(() => {
     phaseRef.current = voicePhase;
   }, [voicePhase]);
@@ -195,8 +189,8 @@ export function useLiveInterviewVoice({
       lastAiQuestionTurn(turnsRef.current)?.content?.trim() ||
       '';
     const echoSources = currentQuestion
-      ? [currentQuestion, captionRef.current.trim()].filter(Boolean)
-      : collectInterviewerTexts(turnsRef.current, [displayQuestionRef.current, captionRef.current]);
+      ? [currentQuestion]
+      : collectInterviewerTexts(turnsRef.current, [displayQuestionRef.current]);
 
     if (isLikelyInterviewerEcho(cleaned, echoSources, langRef.current) && cleaned.length < 120) {
       return null;
