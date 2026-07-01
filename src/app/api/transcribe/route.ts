@@ -1,25 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBackendOrigin } from '@/lib/backendOrigin';
+import { getBackendTranscribeUrl } from '@/lib/voiceConnection';
 
 // Allow this route to run up to 5 minutes (platform may cap lower, e.g. Vercel 60s on Hobby).
 export const maxDuration = 300;
 
-const UPSTREAM_PATH = '/api/v1/transcribe';
-// Whisper (especially on CPU) can be slow; allow up to 4 minutes for long clips.
 const FETCH_TIMEOUT_MS = 240000;
 
 export async function POST(req: NextRequest) {
   const body = await req.arrayBuffer();
   const incomingContentType = req.headers.get('content-type') || '';
 
+  const headers: Record<string, string> = {};
+  if (incomingContentType) headers['Content-Type'] = incomingContentType;
+  const auth = req.headers.get('authorization');
+  if (auth) headers['Authorization'] = auth;
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${getBackendOrigin()}${UPSTREAM_PATH}`, {
+    const res = await fetch(getBackendTranscribeUrl(), {
       method: 'POST',
       body,
-      headers: incomingContentType ? { 'Content-Type': incomingContentType } : undefined,
+      headers,
       signal: controller.signal,
     });
 

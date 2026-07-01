@@ -1,4 +1,8 @@
-import { getBackendOrigin } from '@/lib/backendOrigin';
+import {
+  getTranscribePostUrls,
+  voiceAuthHeaders,
+  getSttHealthUrl,
+} from '@/lib/voiceConnection';
 
 export interface TranscribeResponse {
   transcript: string;
@@ -20,19 +24,6 @@ function filenameForBlob(blob: Blob): string {
   if (type.includes('mp4') || type.includes('aac') || type.includes('mpeg')) return 'recording.mp4';
   if (type.includes('wav')) return 'recording.wav';
   return 'recording.webm';
-}
-
-function transcribeUrls(): string[] {
-  const urls: string[] = [];
-  if (typeof window !== 'undefined') {
-    const origin = getBackendOrigin();
-    if (origin && !/localhost|127\.0\.0\.1/i.test(origin)) {
-      urls.push(`${origin}/api/v1/transcribe`);
-    }
-    urls.push('/api/transcribe');
-    return [...new Set(urls)];
-  }
-  return [`${getBackendOrigin()}/api/v1/transcribe`];
 }
 
 function parseTranscribeError(
@@ -57,12 +48,14 @@ function parseTranscribeError(
 async function postTranscribe(
   url: string,
   formData: FormData,
-  signal: AbortSignal
+  signal: AbortSignal,
+  interviewId?: string
 ): Promise<Response> {
   return fetch(url, {
     method: 'POST',
     body: formData,
     signal,
+    headers: voiceAuthHeaders(interviewId),
   });
 }
 
@@ -83,7 +76,7 @@ export async function transcribeAudio(
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 120000);
 
-  const urls = transcribeUrls();
+  const urls = getTranscribePostUrls();
   let lastError: Error | null = null;
   let lastPayload: Record<string, unknown> = {};
   let lastStatus = 0;
@@ -92,7 +85,12 @@ export async function transcribeAudio(
     for (let i = 0; i < urls.length; i += 1) {
       const url = urls[i]!;
       try {
-        const response = await postTranscribe(url, buildFormData(), controller.signal);
+        const response = await postTranscribe(
+          url,
+          buildFormData(),
+          controller.signal,
+          options?.interviewId
+        );
         const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
         if (response.ok) {
@@ -107,9 +105,10 @@ export async function transcribeAudio(
 
         const retryable = response.status >= 500 || response.status === 503 || response.status === 504;
         if (retryable && i < urls.length - 1) {
-          console.warn('[transcribe] Primary STT endpoint failed, retrying via proxy', {
+          console.warn('[transcribe] STT endpoint failed, trying fallback', {
             url,
             status: response.status,
+            next: urls[i + 1],
           });
           continue;
         }
@@ -126,11 +125,15 @@ export async function transcribeAudio(
         }
         lastError = err instanceof Error ? err : new Error(String(err));
         if (i < urls.length - 1) {
-          console.warn('[transcribe] STT request failed, retrying via proxy', { url, err: lastError.message });
+          console.warn('[transcribe] STT request failed, trying fallback', {
+            url,
+            err: lastError.message,
+            next: urls[i + 1],
+          });
           continue;
         }
         throw new Error(
-          /failed to fetch|network|load/i.test(lastError.message)
+          /failed to fetch|network|load|cors/i.test(lastError.message)
             ? 'Could not reach transcription service. Check your connection.'
             : lastError.message
         );
@@ -143,11 +146,10 @@ export async function transcribeAudio(
   }
 }
 
-/** Verify backend STT is reachable (dev / diagnostics). */
+/** Verify backend STT is reachable (live room diagnostics). */
 export async function checkTranscribeHealth(): Promise<{ ok: boolean; detail?: string }> {
   try {
-    const origin = getBackendOrigin();
-    const res = await fetch(`${origin}/health/stt`, { method: 'GET' });
+    const res = await fetch(getSttHealthUrl(), { method: 'GET', cache: 'no-store' });
     const body = (await res.json().catch(() => ({}))) as { status?: string; hint?: string };
     return {
       ok: res.ok && body.status !== 'error',

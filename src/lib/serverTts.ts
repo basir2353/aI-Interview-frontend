@@ -2,6 +2,7 @@ import type { InterviewLanguageCode } from '@/lib/interviewLanguages';
 import type { InterviewerPersona } from '@/types';
 import { normalizeInterviewLanguage } from '@/lib/interviewLanguages';
 import { CLOUD_TTS_PLAYBACK_RATE } from '@/lib/ttsConfig';
+import { getTtsProxyUrl } from '@/lib/voiceConnection';
 
 const TTS_SPEAKING_EVENT = 'intervion-tts-speaking';
 
@@ -60,7 +61,7 @@ export async function fetchServerTtsAudio(
     language: lang,
   };
   if (persona) body.persona = persona === 'zara' ? 'zara' : 'ethan';
-  const res = await fetch('/api/proxy/ai/tts', {
+  const res = await fetch(getTtsProxyUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

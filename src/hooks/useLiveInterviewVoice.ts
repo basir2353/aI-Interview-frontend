@@ -14,6 +14,7 @@ import type { VoicePipelinePhase } from '@/components/interview/InterviewStatusB
 import { humanStatusLabel } from '@/lib/interviewEngagement';
 import { collectInterviewerTexts, isLikelyInterviewerEcho } from '@/lib/echoGuard';
 import { isSttHallucination } from '@/lib/sttGuard';
+import { checkVoicePipelineHealth } from '@/lib/voiceConnection';
 
 type HumanStatusPhase = 'idle' | 'listening' | 'openingMic' | 'thinking' | 'speaking';
 
@@ -531,6 +532,15 @@ export function useLiveInterviewVoice({
     if (introRanRef.current) return;
     introRanRef.current = true;
     entryCancelledRef.current = false;
+
+    void checkVoicePipelineHealth().then(({ sttOk, sttDetail, backendOrigin }) => {
+      if (!sttOk) {
+        console.warn('[LiveVoice] STT not ready — transcription may fail', {
+          backendOrigin,
+          detail: sttDetail,
+        });
+      }
+    });
 
     try {
       let liveState = prefetchedStateRef.current;
