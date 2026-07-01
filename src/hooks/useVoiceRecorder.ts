@@ -264,6 +264,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
   }, [onProcessing]);
 
   const cancel = useCallback(() => {
+    if (processingRef.current) return;
     skipTranscribeRef.current = true;
     const rec = recorderRef.current;
     if (!rec || rec.state === 'inactive') {

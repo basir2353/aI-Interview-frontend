@@ -159,6 +159,7 @@ export default function LiveInterviewPage() {
     onListeningChange,
     resetNoSpeechRetries,
     openMicForVoiceOff,
+    onTranscriptReady,
   } = voiceLoop;
 
   useEffect(() => {
@@ -499,12 +500,14 @@ export default function LiveInterviewPage() {
   const handleVoiceTranscript = useCallback(
     (text: string) => {
       const cleaned = text.trim();
+      onTranscriptReady();
       if (!cleaned) {
         onSubmitFinished();
         return;
       }
 
-      const substantialTranscript = cleaned.length >= 24 || cleaned.split(/\s+/).filter(Boolean).length >= 5;
+      const substantialTranscript =
+        cleaned.length >= 10 || cleaned.split(/\s+/).filter(Boolean).length >= 2;
       if (!lastClipHadSpeechRef.current && !userInitiatedMicRef.current && !substantialTranscript) {
         console.warn('[Interview] Ignoring transcript — no VAD speech detected (likely TTS echo)');
         onCaptureRejected('That did not sound like a real answer.');
@@ -554,9 +557,12 @@ export default function LiveInterviewPage() {
       state?.turns,
       onCaptureRejected,
       onSubmitFinished,
+      onTranscriptReady,
       resetNoSpeechRetries,
       interviewLang,
       setCaptureError,
+      lastClipHadSpeechRef,
+      userInitiatedMicRef,
     ]
   );
 

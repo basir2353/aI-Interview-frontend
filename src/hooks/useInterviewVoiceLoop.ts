@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { AudioRecorderHandle } from '@/components/AudioRecorder';
 import type { VoicePipelinePhase } from '@/components/interview/InterviewStatusBar';
-import { subscribeInterviewerSpeaking } from '@/lib/interviewerSpeech';
 import {
   TTS_AFTER_SPEAK_MIC_DELAY_MS,
   TTS_POST_SPEECH_MIC_DELAY_MS,
@@ -62,6 +61,7 @@ export function useInterviewVoiceLoop({
   const lastClipHadSpeechRef = useRef(false);
   const userInitiatedMicRef = useRef(false);
   const getLatestAiTurnRef = useRef(getLatestAiTurn);
+  const lastSpeakStartAtRef = useRef(0);
 
   useEffect(() => {
     phaseRef.current = voicePhase;
@@ -110,7 +110,10 @@ export function useInterviewVoiceLoop({
       clearTimers();
       autoListeningRef.current = false;
       setAutoMicPending(false);
-      if (cancelRecording) audioRecorderRef.current?.cancel();
+      const recorder = audioRecorderRef.current;
+      if (cancelRecording && !transcribingRef.current && !submittingRef.current && !recorder?.processing) {
+        recorder?.cancel();
+      }
       if (listenWindowRef.current) {
         clearTimeout(listenWindowRef.current);
         listenWindowRef.current = null;
@@ -188,7 +191,7 @@ export function useInterviewVoiceLoop({
       }
 
       if (!canAutoOpen()) {
-        if (attempt < 120) {
+        if (attempt < 20) {
           retryTimerRef.current = setTimeout(() => tryOpenWithRetry(gen, attempt + 1), 300);
         } else {
           setAutoMicPending(false);
@@ -198,7 +201,7 @@ export function useInterviewVoiceLoop({
 
       void openMic(false).then((ok) => {
         if (gen !== openGenerationRef.current) return;
-        if (!ok && attempt < 120) {
+        if (!ok && attempt < 20) {
           retryTimerRef.current = setTimeout(() => tryOpenWithRetry(gen, attempt + 1), 400);
         } else if (!ok) {
           setAutoMicPending(false);
@@ -212,6 +215,9 @@ export function useInterviewVoiceLoop({
   const scheduleOpenMicAfterQuestion = useCallback(
     (delayMs: number = TTS_POST_SPEECH_MIC_DELAY_MS) => {
       if (!voiceEnabledRef.current) return;
+      if (transcribingRef.current || submittingRef.current) return;
+      const recorder = audioRecorderRef.current;
+      if (recorder?.listening || recorder?.processing) return;
       bumpGeneration();
       clearTimers();
       const gen = openGenerationRef.current;
@@ -220,20 +226,30 @@ export function useInterviewVoiceLoop({
 
       openTimerRef.current = setTimeout(() => {
         if (gen !== openGenerationRef.current) return;
+        if (transcribingRef.current || submittingRef.current) return;
         tryOpenWithRetry(gen, 0);
       }, Math.max(0, delayMs));
     },
-    [bumpGeneration, clearTimers, tryOpenWithRetry]
+    [audioRecorderRef, bumpGeneration, clearTimers, tryOpenWithRetry]
   );
 
   const onInterviewerSpeakStart = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSpeakStartAtRef.current < 500) return;
+    lastSpeakStartAtRef.current = now;
+
+    if (transcribingRef.current || submittingRef.current) return;
+
     clearTimers();
     const recorder = audioRecorderRef.current;
+    if (recorder?.processing) return;
+    if (recorder?.busy && !recorder?.listening) return;
+
     if (recorder?.listening) {
       autoListeningRef.current = false;
       recorder.stop();
     } else {
-      closeMic(true);
+      closeMic(false);
     }
     setVoicePhase('speaking');
     phaseRef.current = 'speaking';
@@ -429,37 +445,9 @@ export function useInterviewVoiceLoop({
     noSpeechRetryRef.current = 0;
   }, []);
 
-  /** Close mic when TTS starts (backup if speak-start callback missed). */
-  useEffect(() => {
-    return subscribeInterviewerSpeaking((speaking) => {
-      if (speaking) onInterviewerSpeakStart();
-    });
-  }, [onInterviewerSpeakStart]);
-
-  /** One safety open if mic stuck closed after question (no competing schedulers). */
-  useEffect(() => {
-    if (!live || !voiceEnabled || micOn || autoMicPending) return;
-    if (phaseRef.current === 'speaking' || submittingRef.current || transcribingRef.current) return;
-    if (introPlaybackActiveRef.current) return;
-    if (isCodingTurn(getLatestAiTurnRef.current())) return;
-    if (userMutedRef.current) return;
-
-    const timer = window.setTimeout(() => {
-      if (micOnRef.current || autoMicPending) return;
-      if (phaseRef.current === 'speaking' || submittingRef.current || transcribingRef.current) return;
-      if (introPlaybackActiveRef.current) return;
-      scheduleOpenMicAfterQuestion(TTS_POST_SPEECH_MIC_DELAY_MS);
-    }, 4000);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    live,
-    voiceEnabled,
-    micOn,
-    autoMicPending,
-    introPlaybackActiveRef,
-    scheduleOpenMicAfterQuestion,
-  ]);
+  const onTranscriptReady = useCallback(() => {
+    transcribingRef.current = false;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -494,6 +482,7 @@ export function useInterviewVoiceLoop({
     onIdleTimeout,
     onListeningChange,
     resetNoSpeechRetries,
+    onTranscriptReady,
     openMicForVoiceOff: () => void openMic(false),
   };
 }
