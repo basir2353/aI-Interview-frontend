@@ -77,6 +77,14 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     transcribeMixed,
   } = options;
 
+  const transcribeLanguageRef = useRef(transcribeLanguage);
+  const transcribeMixedRef = useRef(transcribeMixed);
+
+  useEffect(() => {
+    transcribeLanguageRef.current = transcribeLanguage;
+    transcribeMixedRef.current = transcribeMixed;
+  }, [transcribeLanguage, transcribeMixed]);
+
   const [status, setStatus] = useState<RecorderStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const processingRef = useRef(false);
@@ -252,7 +260,7 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
     silenceSinceRef.current = null;
     speechSeenRef.current = false;
     noiseFloorRef.current = 0.008;
-    calibrateUntilRef.current = Date.now() + 500;
+    calibrateUntilRef.current = Date.now() + 700;
 
     const mimeType = pickBestRecorderMimeType();
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -324,8 +332,8 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
         }
 
         const { transcript } = await transcribeAudio(uploadBlob, uploadName, {
-          language: transcribeLanguage,
-          mixed: transcribeMixed,
+          language: transcribeLanguageRef.current,
+          mixed: transcribeMixedRef.current,
         });
         const text = (transcript || '').trim();
         console.log('[useVoiceRecorder] Transcript:', text);
@@ -392,10 +400,10 @@ export function useVoiceRecorder(options: UseVoiceRecorderOptions = {}): UseVoic
           }
 
           // Dynamic threshold: scale from noise floor, with sane bounds.
-          const floor = Math.max(0.0035, Math.min(0.05, noiseFloorRef.current));
-          const thresholdRms = Math.max(0.0045, floor * 3.0 + 0.0015);
-          const thresholdPeak = Math.max(0.03, thresholdRms * 3.5);
-          const isSpeech = rms > thresholdRms * 1.15 || peak > thresholdPeak;
+          const floor = Math.max(0.003, Math.min(0.05, noiseFloorRef.current));
+          const thresholdRms = Math.max(0.004, floor * 2.5 + 0.0012);
+          const thresholdPeak = Math.max(0.025, thresholdRms * 3.2);
+          const isSpeech = rms > thresholdRms * 1.1 || peak > thresholdPeak;
           // Count as silence when quiet so recording stops soon after user finishes speaking
           const isSilent = rms < thresholdRms * 0.7 && peak < thresholdPeak * 0.7;
 

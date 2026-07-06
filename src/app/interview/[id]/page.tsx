@@ -33,6 +33,7 @@ import {
   speechSynthesisLang,
   sttLanguageForInterview,
   sttAllowsMixedLanguage,
+  isNonEnglishInterview,
 } from '@/lib/interviewLanguages';
 import {
   getInterviewElapsedSeconds,
@@ -290,6 +291,9 @@ export default function LiveInterviewPage() {
     try {
       const s = await api.getState(id);
       setState(s);
+      if (s.interviewLanguage) {
+        setInterviewLang(normalizeInterviewLanguage(s.interviewLanguage));
+      }
     } catch (e) {
       setState(null);
       setStateLoadError(
@@ -1072,11 +1076,14 @@ export default function LiveInterviewPage() {
     );
   }
 
+  const normalizedInterviewLang = normalizeInterviewLanguage(interviewLang);
+  const multilingualInterview = isNonEnglishInterview(normalizedInterviewLang);
+
   const voiceRecorderNode = (
     <AudioRecorder
       ref={audioRecorderRef}
-      transcribeLanguage={sttLanguageForInterview(normalizeInterviewLanguage(interviewLang))}
-      transcribeMixed={sttAllowsMixedLanguage(normalizeInterviewLanguage(interviewLang))}
+      transcribeLanguage={sttLanguageForInterview(normalizedInterviewLang)}
+      transcribeMixed={sttAllowsMixedLanguage(normalizedInterviewLang)}
       onTranscript={handleVoiceTranscript}
       onProcessing={() => {
         setMicOn(false);
@@ -1092,13 +1099,15 @@ export default function LiveInterviewPage() {
         setError(
           msg.includes('timed out')
             ? 'Transcription took too long. Please speak a shorter answer and try again.'
-            : 'Transcription failed. Click the mic button and try again.'
+            : multilingualInterview
+              ? 'Transcription failed. Speak clearly in your interview language, or click the mic to try again.'
+              : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={2400}
-      minRecordMs={900}
-      minSpeechMs={500}
-      stopDelayMs={280}
+      silenceMs={multilingualInterview ? 2800 : 2400}
+      minRecordMs={multilingualInterview ? 1000 : 900}
+      minSpeechMs={multilingualInterview ? 700 : 500}
+      stopDelayMs={multilingualInterview ? 320 : 280}
       maxRecordMs={120000}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;

@@ -103,3 +103,8 @@ export function sttLanguageForInterview(code?: InterviewLanguageCode): string {
 export function sttAllowsMixedLanguage(code?: InterviewLanguageCode): boolean {
   return normalizeInterviewLanguage(code ?? DEFAULT_INTERVIEW_LANGUAGE) !== 'en-US';
 }
+
+/** Urdu, Arabic, Hindi, etc. — use slightly longer mic windows for natural speech rhythm. */
+export function isNonEnglishInterview(code?: InterviewLanguageCode): boolean {
+  return normalizeInterviewLanguage(code ?? DEFAULT_INTERVIEW_LANGUAGE) !== 'en-US';
+}
