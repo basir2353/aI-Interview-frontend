@@ -45,6 +45,8 @@ export default function LiveInterviewPage() {
   const id = params.id as string;
 
   const [state, setState] = useState<InterviewState | null>(null);
+  const [stateLoading, setStateLoading] = useState(true);
+  const [stateLoadError, setStateLoadError] = useState('');
   const [answerText, setAnswerText] = useState('');
   const [codeAnswer, setCodeAnswer] = useState('');
   const [codeNotes, setCodeNotes] = useState('');
@@ -276,11 +278,20 @@ export default function LiveInterviewPage() {
 
   const loadState = useCallback(async () => {
     if (!id) return;
+    setStateLoading(true);
+    setStateLoadError('');
     try {
       const s = await api.getState(id);
       setState(s);
-    } catch {
+    } catch (e) {
       setState(null);
+      setStateLoadError(
+        e instanceof Error
+          ? e.message
+          : 'Interview session not found or expired. Please use your original join link to start again.'
+      );
+    } finally {
+      setStateLoading(false);
     }
   }, [id]);
 
@@ -788,9 +799,9 @@ export default function LiveInterviewPage() {
     };
   }, [clearAutoListenTimeout]);
 
-  // When user closes tab or navigates away, end the interview so results appear on recruiter dashboard
+  // End the interview only after the candidate entered the live room (not during device-check / notes).
   useEffect(() => {
-    if (!id || typeof window === 'undefined') return;
+    if (!id || typeof window === 'undefined' || roomPhase !== 'live') return;
 
     const endInterviewOnLeave = () => {
       if (endedByUnloadRef.current) return;
@@ -806,7 +817,7 @@ export default function LiveInterviewPage() {
       window.removeEventListener('beforeunload', endInterviewOnLeave);
       window.removeEventListener('pagehide', endInterviewOnLeave);
     };
-  }, [id]);
+  }, [id, roomPhase]);
 
   // Camera-based idle detection while waiting before next question
   useEffect(() => {
@@ -896,18 +907,40 @@ export default function LiveInterviewPage() {
     );
   }
 
-  if (!state) {
+  if (stateLoading || !state) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--interview-bg)]">
         <div className="w-full max-w-md space-y-4 px-6 text-center">
-          <div className="mx-auto h-12 w-12 animate-pulse rounded-2xl bg-[var(--interview-border)]" />
-          <div className="space-y-2">
-            <div className="mx-auto h-4 w-48 animate-pulse rounded-lg bg-[var(--interview-border)]" />
-            <div className="mx-auto h-3 w-64 animate-pulse rounded-lg bg-[var(--interview-border)]/70" />
-          </div>
-          <Link href="/interview" className="inline-block text-sm font-medium text-[var(--interview-accent)] hover:underline">
-            Back to start
-          </Link>
+          {stateLoading ? (
+            <>
+              <div className="mx-auto h-12 w-12 animate-pulse rounded-2xl bg-[var(--interview-border)]" />
+              <div className="space-y-2">
+                <div className="mx-auto h-4 w-48 animate-pulse rounded-lg bg-[var(--interview-border)]" />
+                <div className="mx-auto h-3 w-64 animate-pulse rounded-lg bg-[var(--interview-border)]/70" />
+              </div>
+              <p className="text-sm text-[var(--interview-muted)]">Loading your interview room…</p>
+            </>
+          ) : (
+            <>
+              <p className="text-base font-medium text-[var(--interview-fg)]">Could not open interview</p>
+              <p className="text-sm text-[var(--interview-muted)]">
+                {stateLoadError ||
+                  'This session may have expired. Use your original join link from email to start again.'}
+              </p>
+              <div className="flex flex-col items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void loadState()}
+                  className="rounded-xl bg-[var(--interview-accent)] px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+                >
+                  Try again
+                </button>
+                <Link href="/interview" className="text-sm font-medium text-[var(--interview-accent)] hover:underline">
+                  Back to start
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
