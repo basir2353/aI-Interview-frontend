@@ -35,6 +35,12 @@ import {
   sttAllowsMixedLanguage,
 } from '@/lib/interviewLanguages';
 import {
+  getInterviewElapsedSeconds,
+  INTERVIEW_TIME_UP_MESSAGE,
+  isInterviewTimeExpired,
+  resolveInterviewDurationMinutes,
+} from '@/lib/interviewDuration';
+import {
   InterviewStatusBar,
   type VoicePipelinePhase,
 } from '@/components/interview/InterviewStatusBar';
@@ -109,6 +115,7 @@ export default function LiveInterviewPage() {
   const cameraAnalysisFrameRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
   const lastCodingQuestionIdRef = useRef<string | null>(null);
   const endedByUnloadRef = useRef(false);
+  const timeExpiredEndRef = useRef(false);
   const introPipelineRanRef = useRef(false);
   const loadingRef = useRef(false);
 
@@ -419,6 +426,16 @@ export default function LiveInterviewPage() {
     try {
       const res = await api.submitAnswer(id, text);
       if (res.report) {
+        if (res.nextReply?.trim() && voiceEnabled) {
+          setVoicePhase('speaking');
+          setDisplayQuestion(res.nextReply.trim());
+          await speakInterviewerText(res.nextReply.trim(), {
+            lang: interviewLang,
+            persona: interviewerPersona,
+          });
+        }
+        endedByUnloadRef.current = true;
+        timeExpiredEndRef.current = true;
         setReport(res.report);
         setState(null);
       } else {
@@ -442,7 +459,56 @@ export default function LiveInterviewPage() {
       pipelineBusyRef.current = false;
       submitInFlightRef.current = false;
     }
-  }, [audioRecorderRef, clearAutoListenTimeout, id, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow, syncDisplayQuestionFromState]);
+  }, [audioRecorderRef, clearAutoListenTimeout, id, interviewLang, interviewerPersona, loadState, loading, stopSpeaking, voiceEnabled, startAutoListeningWindow, syncDisplayQuestionFromState]);
+
+  const finishInterviewWithGoodbye = useCallback(
+    async (goodbyeText: string) => {
+      stopSpeaking();
+      clearAutoListenTimeout();
+      autoListeningRef.current = false;
+      noSpeechRetryRef.current = 0;
+      audioRecorderRef.current?.stop();
+      setMicOn(false);
+      setLoading(true);
+      setError('');
+      try {
+        if (voiceEnabled && goodbyeText.trim()) {
+          setVoicePhase('speaking');
+          setDisplayQuestion(goodbyeText.trim());
+          await speakInterviewerText(goodbyeText.trim(), {
+            lang: interviewLang,
+            persona: interviewerPersona,
+          });
+        }
+        const res = await api.endInterview(id);
+        endedByUnloadRef.current = true;
+        if (res.report) setReport(res.report);
+        setState(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to end interview');
+        setVoicePhase('idle');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      audioRecorderRef,
+      clearAutoListenTimeout,
+      id,
+      interviewLang,
+      interviewerPersona,
+      stopSpeaking,
+      voiceEnabled,
+    ]
+  );
+
+  useEffect(() => {
+    if (roomPhase !== 'live' || !state || report || timeExpiredEndRef.current) return;
+    if (!state.liveStartedAt) return;
+    if (!isInterviewTimeExpired(state, nowTs)) return;
+    timeExpiredEndRef.current = true;
+    void finishInterviewWithGoodbye(INTERVIEW_TIME_UP_MESSAGE);
+  }, [roomPhase, state, report, nowTs, finishInterviewWithGoodbye]);
 
   const handleVoiceTranscript = useCallback(
     (text: string) => {
@@ -755,6 +821,21 @@ export default function LiveInterviewPage() {
         if (needsWelcome) {
           const res = await api.beginLiveInterview(id);
           if (cancelled) return;
+          if (res.report) {
+            timeExpiredEndRef.current = true;
+            endedByUnloadRef.current = true;
+            if (voiceEnabled && res.firstIntro?.trim()) {
+              setVoicePhase('speaking');
+              setDisplayQuestion(res.firstIntro.trim());
+              await speakInterviewerText(res.firstIntro.trim(), {
+                lang: interviewLang,
+                persona: interviewerPersona,
+              });
+            }
+            setReport(res.report);
+            setState(null);
+            return;
+          }
           liveState = res.state;
           setState(res.state);
           syncDisplayQuestionFromStateRef.current(res.state);
@@ -782,7 +863,7 @@ export default function LiveInterviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [roomPhase, liveScreenReady, report, id, interviewLang, interviewerPersona]);
+  }, [roomPhase, liveScreenReady, report, id, interviewLang, interviewerPersona, voiceEnabled]);
 
   useEffect(() => {
     return () => {
@@ -1014,10 +1095,10 @@ export default function LiveInterviewPage() {
             : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={3000}
+      silenceMs={2400}
       minRecordMs={900}
       minSpeechMs={500}
-      stopDelayMs={400}
+      stopDelayMs={280}
       maxRecordMs={120000}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
@@ -1034,7 +1115,7 @@ export default function LiveInterviewPage() {
           if (!autoListeningRef.current || loading || !voiceEnabled || userMutedRef.current) return;
           if (audioRecorderRef.current?.busy) return;
           startAutoListeningWindow();
-        }, 600);
+        }, 400);
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}
@@ -1061,9 +1142,12 @@ export default function LiveInterviewPage() {
     />
   );
 
-  const elapsedSeconds = state.startedAt
-    ? Math.max(0, Math.floor((nowTs - new Date(state.startedAt).getTime()) / 1000))
-    : 0;
+  const elapsedSeconds = state.liveStartedAt
+    ? getInterviewElapsedSeconds(state, nowTs)
+    : state.startedAt
+      ? Math.max(0, Math.floor((nowTs - new Date(state.startedAt).getTime()) / 1000))
+      : 0;
+  const interviewLimitMinutes = resolveInterviewDurationMinutes(state.durationMinutes);
   const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
   const seconds = String(elapsedSeconds % 60).padStart(2, '0');
 
@@ -1158,6 +1242,12 @@ export default function LiveInterviewPage() {
         </div>
         <div className="shrink-0 rounded-2xl border border-[var(--interview-border)] bg-[var(--interview-card)] px-4 py-2 text-sm font-medium tabular-nums text-[var(--interview-muted)] shadow-[var(--interview-shadow)]">
           {minutes}:{seconds}
+          {state.liveStartedAt ? (
+            <span className="text-[var(--interview-muted)]/70">
+              {' '}
+              / {String(interviewLimitMinutes).padStart(2, '0')}:00
+            </span>
+          ) : null}
         </div>
       </header>
 

@@ -2,16 +2,16 @@
 export const BROWSER_TTS_RATE = 1.18;
 
 /** HTMLAudio playback rate for cloud MP3 (1.0 = normal). */
-export const CLOUD_TTS_PLAYBACK_RATE = 1.05;
+export const CLOUD_TTS_PLAYBACK_RATE = 1.1;
 
 /** Delay before speaking a new AI turn after state update. */
-export const TTS_TURN_START_DELAY_MS = 40;
+export const TTS_TURN_START_DELAY_MS = 15;
 
 /** Pause after interviewer finishes before opening mic. */
-export const TTS_AFTER_SPEAK_MIC_DELAY_MS = 80;
+export const TTS_AFTER_SPEAK_MIC_DELAY_MS = 30;
 
 /** Pause between intro block and first question. */
-export const TTS_INTRO_TO_QUESTION_PAUSE_MS = 50;
+export const TTS_INTRO_TO_QUESTION_PAUSE_MS = 25;
 
 /** Delay before live-room intro TTS starts (UI paint). */
-export const TTS_LIVE_ROOM_READY_MS = 120;
+export const TTS_LIVE_ROOM_READY_MS = 80;

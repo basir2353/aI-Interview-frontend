@@ -60,6 +60,8 @@ export interface InterviewState {
   role: InterviewRole;
   phase: InterviewPhase;
   startedAt: string;
+  /** When the candidate entered the live interview room (timer starts here). */
+  liveStartedAt?: string;
   endedAt?: string;
   turns: Turn[];
   topicCoverage: Record<string, boolean>;
@@ -117,6 +119,7 @@ export interface BeginLiveInterviewResponse {
   firstIntro: string;
   alreadyDelivered?: boolean;
   avatarVideo?: string;
+  report?: InterviewReport;
 }
 
 export interface SubmitAnswerResponse {

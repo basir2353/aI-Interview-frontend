@@ -64,7 +64,7 @@ export default function RecruiterSchedulePage() {
   const [scheduleTime, setScheduleTime] = useState('10:00');
   const [role, setRole] = useState<InterviewRole>('technical');
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [durationMinutes, setDurationMinutes] = useState('45');
+  const [durationMinutes, setDurationMinutes] = useState('16');
   const [focusAreas, setFocusAreas] = useState('');
   const [codingInterviewMode, setCodingInterviewMode] = useState<CodingInterviewModeId | ''>('');
   const [requirements, setRequirements] = useState('');
@@ -326,8 +326,8 @@ export default function RecruiterSchedulePage() {
                 </select>
                 <input
                   type="number"
-                  min={10}
-                  max={240}
+                  min={15}
+                  max={17}
                   value={durationMinutes}
                   onChange={(e) => setDurationMinutes(e.target.value)}
                   placeholder="Duration (minutes)"
