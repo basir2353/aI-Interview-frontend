@@ -13,6 +13,7 @@ import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
 import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
+import { fetchServerTtsAudio, playServerTtsAudio } from '@/lib/serverTts';
 import {
   TTS_AFTER_SPEAK_MIC_DELAY_MS,
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
@@ -778,6 +779,12 @@ export default function LiveInterviewPage() {
         setIntroSpeaking(true);
         const introTexts = segments.slice(0, introSegmentCount).filter(Boolean);
         const questionTexts = segments.slice(introSegmentCount).filter(Boolean);
+        const combinedQuestion = questionTexts.join(' ').trim();
+
+        // Prefetch Q1 audio while intro speaks — kills the mid-gap from a second TTS round-trip.
+        const questionAudioPromise = combinedQuestion
+          ? fetchServerTtsAudio(combinedQuestion, interviewLang, interviewerPersona).catch(() => null)
+          : Promise.resolve(null);
 
         if (introTexts.length > 0) {
           if (cancelled) return;
@@ -785,18 +792,33 @@ export default function LiveInterviewPage() {
           setLiveCaption(combinedIntro);
           setIntroSpeaking(true);
           await speakSegment(combinedIntro, true);
-          if (questionTexts.length > 0) {
+          if (combinedQuestion) {
             await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
           }
         }
 
-        if (questionTexts.length > 0) {
+        if (combinedQuestion) {
           if (cancelled) return;
-          const combinedQuestion = questionTexts.join(' ');
           setLiveCaption(combinedQuestion);
           setIntroSpeaking(false);
           setDisplayQuestion(combinedQuestion);
-          await speakSegment(combinedQuestion, false);
+          const prefetched = await questionAudioPromise;
+          if (prefetched) {
+            await playServerTtsAudio(prefetched, {
+              onStart: () => {
+                clearAutoListenTimeoutRef.current();
+                autoListeningRef.current = false;
+                audioRecorderRef.current?.cancel();
+                setMicOn(false);
+                setVoicePhase('speaking');
+                setIntroSpeaking(false);
+                setLiveCaption(combinedQuestion);
+                setDisplayQuestion(combinedQuestion);
+              },
+            });
+          } else {
+            await speakSegment(combinedQuestion, false);
+          }
         } else if (questionTurn?.content?.trim()) {
           setDisplayQuestion(questionTurn.content.trim());
         }
