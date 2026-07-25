@@ -6,7 +6,7 @@ export const maxDuration = 300;
 
 const UPSTREAM_PATH = '/api/v1/transcribe';
 // Whisper (especially on CPU) can be slow; allow up to 4 minutes for long clips.
-const FETCH_TIMEOUT_MS = 240000;
+const FETCH_TIMEOUT_MS = 90000;
 
 export async function POST(req: NextRequest) {
   const body = await req.arrayBuffer();

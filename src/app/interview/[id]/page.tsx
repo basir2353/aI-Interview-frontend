@@ -13,7 +13,6 @@ import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
 import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
-import { fetchServerTtsAudio, playServerTtsAudio } from '@/lib/serverTts';
 import {
   TTS_AFTER_SPEAK_MIC_DELAY_MS,
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
@@ -202,16 +201,16 @@ export default function LiveInterviewPage() {
     }, listenWindowMs);
   }, [voiceEnabled, loading, clearAutoListenTimeout, state]);
 
-  /** Intro beats + first question are spoken manually on live entry — skip auto-TTS for those. */
+  /** First opener is spoken manually on live entry — skip auto-TTS for that turn. */
   const manualSpokenAiTurnIds = useMemo(() => {
     const aiTurns = state?.turns?.filter((t) => t.role === 'ai') ?? [];
     if (!aiTurns.length) return null;
     const introTurns = aiTurns.filter((t) => t.isIntro);
-    const firstQuestion = aiTurns.find((t) => !t.isIntro);
-    if (introTurns.length >= 1 && firstQuestion) {
-      return new Set([...introTurns.map((t) => t.id), firstQuestion.id]);
+    const firstQuestion = aiTurns.find((t) => !t.isIntro) ?? aiTurns[0];
+    if (introTurns.length >= 1) {
+      return new Set([...introTurns.map((t) => t.id), ...(firstQuestion ? [firstQuestion.id] : [])]);
     }
-    return new Set(aiTurns.slice(0, Math.min(2, aiTurns.length)).map((t) => t.id));
+    return new Set([firstQuestion.id]);
   }, [state?.turns]);
   const skipTurnIds = manualSpokenAiTurnIds;
 
@@ -760,69 +759,30 @@ export default function LiveInterviewPage() {
     const runVoiceIntro = async (liveState: InterviewState) => {
       const aiTurns = liveState.turns?.filter((t) => t.role === 'ai') ?? [];
       const introTurns = aiTurns.filter((t) => t.isIntro);
-      const questionTurn = aiTurns.find((t) => !t.isIntro);
-      const segments =
-        introTurns.length >= 1
-          ? [...introTurns.map((t) => t.content.trim()).filter(Boolean), ...(questionTurn?.content?.trim() ? [questionTurn.content.trim()] : [])]
-          : aiTurns[0]?.content?.trim()
-            ? [aiTurns[0].content.trim(), ...(aiTurns[1]?.content?.trim() ? [aiTurns[1].content.trim()] : [])]
-            : [];
+      const questionTurn = aiTurns.find((t) => !t.isIntro) ?? aiTurns[0];
+      // Speak a single human opener (legacy multi-beat intros are joined into one utterance).
+      const openerText = [
+        ...introTurns.map((t) => t.content.trim()).filter(Boolean),
+        ...(questionTurn && !introTurns.some((t) => t.id === questionTurn.id)
+          ? [questionTurn.content.trim()].filter(Boolean)
+          : introTurns.length === 0 && questionTurn?.content?.trim()
+            ? [questionTurn.content.trim()]
+            : []),
+      ]
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-      if (segments.length === 0) {
+      if (!openerText) {
         finishIntroAndOpenMic(questionTurn?.id);
         return;
       }
 
-      const introSegmentCount = introTurns.length >= 1 ? introTurns.length : Math.max(0, segments.length - 1);
-
       try {
         setIntroSpeaking(true);
-        const introTexts = segments.slice(0, introSegmentCount).filter(Boolean);
-        const questionTexts = segments.slice(introSegmentCount).filter(Boolean);
-        const combinedQuestion = questionTexts.join(' ').trim();
-
-        // Prefetch Q1 audio while intro speaks — kills the mid-gap from a second TTS round-trip.
-        const questionAudioPromise = combinedQuestion
-          ? fetchServerTtsAudio(combinedQuestion, interviewLang, interviewerPersona).catch(() => null)
-          : Promise.resolve(null);
-
-        if (introTexts.length > 0) {
-          if (cancelled) return;
-          const combinedIntro = introTexts.join(' ');
-          setLiveCaption(combinedIntro);
-          setIntroSpeaking(true);
-          await speakSegment(combinedIntro, true);
-          if (combinedQuestion) {
-            await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
-          }
-        }
-
-        if (combinedQuestion) {
-          if (cancelled) return;
-          setLiveCaption(combinedQuestion);
-          setIntroSpeaking(false);
-          setDisplayQuestion(combinedQuestion);
-          const prefetched = await questionAudioPromise;
-          if (prefetched) {
-            await playServerTtsAudio(prefetched, {
-              onStart: () => {
-                clearAutoListenTimeoutRef.current();
-                autoListeningRef.current = false;
-                audioRecorderRef.current?.cancel();
-                setMicOn(false);
-                setVoicePhase('speaking');
-                setIntroSpeaking(false);
-                setLiveCaption(combinedQuestion);
-                setDisplayQuestion(combinedQuestion);
-              },
-            });
-          } else {
-            await speakSegment(combinedQuestion, false);
-          }
-        } else if (questionTurn?.content?.trim()) {
-          setDisplayQuestion(questionTurn.content.trim());
-        }
-
+        setLiveCaption(openerText);
+        setDisplayQuestion(openerText);
+        await speakSegment(openerText, false);
         await pause(TTS_INTRO_TO_QUESTION_PAUSE_MS);
         finishIntroAndOpenMic(questionTurn?.id ?? aiTurns[aiTurns.length - 1]?.id);
       } catch (e) {
@@ -842,7 +802,7 @@ export default function LiveInterviewPage() {
 
         const needsWelcome =
           !liveState?.welcomeDelivered ||
-          !liveState?.turns.some((t) => t.role === 'ai' && t.isIntro);
+          !liveState?.turns.some((t) => t.role === 'ai');
 
         if (needsWelcome) {
           const res = await api.beginLiveInterview(id);
@@ -1058,7 +1018,7 @@ export default function LiveInterviewPage() {
   const lastCandidateTurn = [...(state.turns ?? [])].reverse().find((t) => t.role === 'candidate');
   const currentQuestion = displayQuestion || lastAiTurn?.content || 'Preparing your next question...';
   const panelLabel =
-    voicePhase === 'speaking' && introSpeaking ? 'Introduction' : 'Current question';
+    voicePhase === 'speaking' && introSpeaking ? 'Getting started' : 'Current question';
   const panelText =
     voicePhase === 'speaking' && liveCaption ? liveCaption : currentQuestion;
   const codingTurnActive = Boolean(
@@ -1126,10 +1086,10 @@ export default function LiveInterviewPage() {
               : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={multilingualInterview ? 2800 : 2400}
-      minRecordMs={multilingualInterview ? 1000 : 900}
-      minSpeechMs={multilingualInterview ? 700 : 500}
-      stopDelayMs={multilingualInterview ? 320 : 280}
+      silenceMs={multilingualInterview ? 1800 : 1500}
+      minRecordMs={multilingualInterview ? 800 : 700}
+      minSpeechMs={multilingualInterview ? 500 : 400}
+      stopDelayMs={multilingualInterview ? 220 : 180}
       maxRecordMs={120000}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
