@@ -1,9 +1,9 @@
 export const INTERVIEWER_VOICE_STORAGE_KEY = 'interviewerVoicePreference';
 const INTERVIEWER_VOICE_BY_LANG_KEY = 'interviewerVoiceByLanguage';
 
-/** Browser default pace — slightly faster for interview flow. */
+/** Browser default pace — slightly under 1.0 so candidates can follow clearly. */
 export const INTERVIEWER_SPEECH_PROFILE = {
-  rate: 1.18,
+  rate: 0.95,
   pitch: 1.0,
   volume: 1.0,
 } as const;

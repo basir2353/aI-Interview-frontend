@@ -1,8 +1,8 @@
-/** Browser Speech API rate when cloud TTS falls back (1.0 = normal). */
-export const BROWSER_TTS_RATE = 1.22;
+/** Browser Speech API rate when cloud TTS falls back (1.0 = normal). Slightly under 1 for clarity. */
+export const BROWSER_TTS_RATE = 0.95;
 
-/** HTMLAudio playback rate for cloud MP3 (1.0 = normal). */
-export const CLOUD_TTS_PLAYBACK_RATE = 1.18;
+/** HTMLAudio playback rate for cloud MP3 (1.0 = natural). */
+export const CLOUD_TTS_PLAYBACK_RATE = 0.98;
 
 /** Delay before speaking a new AI turn after state update. */
 export const TTS_TURN_START_DELAY_MS = 10;
