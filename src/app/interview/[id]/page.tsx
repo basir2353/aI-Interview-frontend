@@ -13,6 +13,7 @@ import { AIAvatar } from '@/components/interview/AIAvatar';
 import { useInterviewerVoice } from '@/hooks/useInterviewerVoice';
 import { useInterviewFaceAnalysis } from '@/hooks/useInterviewFaceAnalysis';
 import { speakInterviewerText, primeInterviewAudio } from '@/lib/interviewerSpeech';
+import { fetchServerTtsAudio } from '@/lib/serverTts';
 import {
   TTS_AFTER_SPEAK_MIC_DELAY_MS,
   TTS_INTRO_TO_QUESTION_PAUSE_MS,
@@ -443,6 +444,9 @@ export default function LiveInterviewPage() {
         setReport(res.report);
         setState(null);
       } else {
+        if (res.nextReply?.trim() && voiceEnabled) {
+          void fetchServerTtsAudio(res.nextReply.trim(), interviewLang, interviewerPersona).catch(() => null);
+        }
         if (res.state) {
           setState(res.state);
           syncDisplayQuestionFromState(res.state);
@@ -456,7 +460,7 @@ export default function LiveInterviewPage() {
       setError(e instanceof Error ? e.message : 'Failed to submit');
       setVoicePhase('idle');
       if (voiceEnabled) {
-        setTimeout(() => startAutoListeningWindow(), 500);
+        setTimeout(() => startAutoListeningWindow(), 250);
       }
     } finally {
       setLoading(false);
@@ -793,11 +797,18 @@ export default function LiveInterviewPage() {
 
     const beginAndSpeak = async () => {
       try {
-        let liveState: InterviewState | null = null;
-        try {
-          liveState = await api.getState(id);
-        } catch {
-          liveState = null;
+        // Prefer in-memory state if join/start already prepared the opener.
+        let liveState: InterviewState | null =
+          state && (state.welcomeDelivered || state.turns?.some((t) => t.role === 'ai'))
+            ? state
+            : null;
+
+        if (!liveState) {
+          try {
+            liveState = await api.getState(id);
+          } catch {
+            liveState = null;
+          }
         }
 
         const needsWelcome =
@@ -1086,10 +1097,10 @@ export default function LiveInterviewPage() {
               : 'Transcription failed. Click the mic button and try again.'
         );
       }}
-      silenceMs={multilingualInterview ? 1800 : 1500}
-      minRecordMs={multilingualInterview ? 800 : 700}
-      minSpeechMs={multilingualInterview ? 500 : 400}
-      stopDelayMs={multilingualInterview ? 220 : 180}
+      silenceMs={multilingualInterview ? 1100 : 900}
+      minRecordMs={multilingualInterview ? 550 : 450}
+      minSpeechMs={multilingualInterview ? 350 : 280}
+      stopDelayMs={multilingualInterview ? 120 : 80}
       maxRecordMs={120000}
       onNoSpeech={() => {
         if (!autoListeningRef.current || !voiceEnabled || loading || userMutedRef.current) return;
@@ -1106,7 +1117,7 @@ export default function LiveInterviewPage() {
           if (!autoListeningRef.current || loading || !voiceEnabled || userMutedRef.current) return;
           if (audioRecorderRef.current?.busy) return;
           startAutoListeningWindow();
-        }, 400);
+        }, 200);
       }}
       disabled={loading || roomPhase !== 'live'}
       autoStart={false}

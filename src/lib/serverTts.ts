@@ -49,11 +49,26 @@ export function subscribeInterviewerSpeaking(onChange: (speaking: boolean) => vo
 }
 
 /** Fetch MP3 from backend Edge TTS (Urdu, Arabic, all supported languages). */
+const ttsCache = new Map<string, ArrayBuffer>();
+const TTS_CACHE_MAX = 12;
+
+function ttsCacheKey(
+  text: string,
+  language: InterviewLanguageCode | string,
+  persona?: InterviewerPersona | string
+): string {
+  return `${normalizeInterviewLanguage(language)}|${persona === 'zara' ? 'zara' : 'ethan'}|${text.trim().slice(0, 4000)}`;
+}
+
 export async function fetchServerTtsAudio(
   text: string,
   language: InterviewLanguageCode | string,
   persona?: InterviewerPersona | string
 ): Promise<ArrayBuffer> {
+  const key = ttsCacheKey(text, language, persona);
+  const cached = ttsCache.get(key);
+  if (cached) return cached.slice(0);
+
   const lang = normalizeInterviewLanguage(language);
   const body: Record<string, string> = {
     text: text.trim().slice(0, 4000),
@@ -69,7 +84,13 @@ export async function fetchServerTtsAudio(
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error || 'TTS request failed');
   }
-  return res.arrayBuffer();
+  const buffer = await res.arrayBuffer();
+  if (ttsCache.size >= TTS_CACHE_MAX) {
+    const first = ttsCache.keys().next().value;
+    if (first) ttsCache.delete(first);
+  }
+  ttsCache.set(key, buffer.slice(0));
+  return buffer;
 }
 
 let activeAudio: HTMLAudioElement | null = null;

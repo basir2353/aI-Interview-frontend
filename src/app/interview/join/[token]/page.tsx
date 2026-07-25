@@ -114,7 +114,7 @@ export default function JoinInterviewPage() {
   useEffect(() => {
     if (!info?.canStart || loading || error) return;
     if (info.alreadyCompleted || info.status === 'cancelled') return;
-    const t = setTimeout(() => goToInterviewRoom(), 1200);
+    const t = setTimeout(() => goToInterviewRoom(), 400);
     return () => clearTimeout(t);
   }, [info?.canStart, loading, error, info?.alreadyCompleted, info?.status]);
 

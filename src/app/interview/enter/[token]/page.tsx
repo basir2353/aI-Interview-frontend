@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { InterviewDeviceCheck } from '@/components/interview/InterviewDeviceCheck';
 import { useInterviewRoomTheme } from '@/hooks/useInterviewRoomTheme';
+import { fetchServerTtsAudio } from '@/lib/serverTts';
+import { normalizeInterviewLanguage } from '@/lib/interviewLanguages';
 
 /**
  * Pre-live room: camera/mic check, then start the interview session and open the live screen.
- * The AI intro only begins after the candidate reaches the live interview UI.
+ * First question is prepared on the server during start; TTS is prefetched here for instant speak.
  */
 export default function InterviewEnterPage() {
   const params = useParams();
@@ -32,6 +34,28 @@ export default function InterviewEnterPage() {
       if (typeof window !== 'undefined') {
         window.sessionStorage.setItem('interviewBeginLive', '1');
       }
+
+      const aiTurns = res.state?.turns?.filter((t) => t.role === 'ai') ?? [];
+      const opener =
+        (res.firstReply || '').trim() ||
+        aiTurns
+          .map((t) => t.content.trim())
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+
+      if (opener && typeof window !== 'undefined') {
+        const lang = normalizeInterviewLanguage(res.state?.interviewLanguage);
+        const persona = res.state?.interviewerPersona;
+        // Warm TTS while navigating to live room — first question speaks faster.
+        void fetchServerTtsAudio(opener, lang, persona).catch(() => null);
+        try {
+          window.sessionStorage.setItem(`interviewOpener:${res.interviewId}`, opener);
+        } catch {
+          /* ignore quota */
+        }
+      }
+
       router.replace(`/interview/${res.interviewId}`);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to start interview';
@@ -55,7 +79,7 @@ export default function InterviewEnterPage() {
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="rounded-2xl border border-white/10 bg-[var(--interview-card)] px-8 py-6 text-center shadow-lg">
             <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-[var(--interview-accent)]/20 border-t-[var(--interview-accent)]" />
-            <p className="text-sm font-medium text-[var(--interview-fg)]">Opening interview room…</p>
+            <p className="text-sm font-medium text-[var(--interview-fg)]">Preparing your first question…</p>
           </div>
         </div>
       )}
