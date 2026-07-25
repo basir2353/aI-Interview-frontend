@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { SHOW_PRICING } from '@/lib/featureFlags';
 import { MotionReveal } from './MotionReveal';
 
 const features = [
@@ -86,9 +87,11 @@ export function FeaturesGrid() {
           <Link href="/how-it-works" className="text-sm font-semibold text-[var(--landing-text)] underline-offset-4 hover:underline">
             How it works
           </Link>
-          <Link href="/#pricing" className="text-sm font-semibold text-[var(--landing-text)] underline-offset-4 hover:underline">
-            Pricing
-          </Link>
+          {SHOW_PRICING && (
+            <Link href="/#pricing" className="text-sm font-semibold text-[var(--landing-text)] underline-offset-4 hover:underline">
+              Pricing
+            </Link>
+          )}
           <Link href="/#contact" className="text-sm font-semibold text-[var(--landing-text)] underline-offset-4 hover:underline">
             Request a demo
           </Link>

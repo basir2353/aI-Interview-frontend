@@ -3,6 +3,8 @@
  * Used by SiteHeader (global navbar) and AppShell.
  */
 
+import { SHOW_PRICING } from '@/lib/featureFlags';
+
 export type NavItem = { href: string; label: string; primary?: boolean; superAdminOnly?: boolean };
 
 export const recruiterNavItems: NavItem[] = [
@@ -42,7 +44,7 @@ export const publicNavItems: NavItem[] = [
   { href: '/#product', label: 'Product' },
   { href: '/#features', label: 'Features' },
   { href: '/#how-it-works', label: 'How it works' },
-  { href: '/#pricing', label: 'Pricing' },
+  ...(SHOW_PRICING ? [{ href: '/#pricing', label: 'Pricing' } satisfies NavItem] : []),
   { href: '/#faq', label: 'FAQ' },
 ];
 

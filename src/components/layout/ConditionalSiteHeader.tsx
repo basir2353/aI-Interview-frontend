@@ -10,8 +10,8 @@ import {
 } from '@/lib/interviewOnboardingGate';
 
 /**
- * Renders the main site header only outside dashboard app routes.
- * Admin and recruiter use sidebar shells; the marketing header duplicates nav and clashes visually.
+ * Renders the main site header only outside app shells and immersive flows.
+ * Admin, recruiter, and candidate workspaces use their own shells.
  */
 export function ConditionalSiteHeader() {
   const pathname = usePathname();

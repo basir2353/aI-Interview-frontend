@@ -3,11 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
-import { CandidateSubnav } from '@/components/layout/CandidateSubnav';
+import { CandidateShell } from '@/components/layout/CandidateShell';
 import { CandidateInterviewCard } from '@/components/candidate/CandidateApplicationCard';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { api, type CandidateDashboardResponse } from '@/lib/api';
 
 export default function CandidateDashboardPage() {
@@ -36,63 +33,39 @@ export default function CandidateDashboardPage() {
   }, [router]);
 
   const upcoming = data?.applications.filter((app) => app.schedule && app.schedule.status !== 'completed') ?? [];
+  const recent = data?.applications.slice(0, 3) ?? [];
 
   return (
-    <AppShell
-      title="My Profile Dashboard"
-      subtitle="Your details, applications, and interview progress"
-      backHref="/jobs"
-      backLabel="Jobs"
-      theme="light"
-      actions={
-        <Button
-          variant="secondary"
-          size="md"
-          className="w-full sm:w-auto"
-          onClick={() => {
-            localStorage.removeItem('candidateToken');
-            localStorage.removeItem('candidateName');
-            localStorage.removeItem('candidateEmail');
-            router.replace('/candidate/login');
-          }}
-        >
-          Logout
-        </Button>
-      }
+    <CandidateShell
+      title={data ? `Welcome, ${data.profile.name || 'there'}` : 'Overview'}
+      subtitle="Your interviews and applications in one place."
     >
-      <div className="space-y-4 sm:space-y-6">
-        <CandidateSubnav />
-        {loading && <p className="text-sm text-[var(--surface-light-muted)] font-medium">Loading dashboard…</p>}
-        {error && <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>}
+      {loading && <p className="text-sm font-medium text-[#64748b]">Loading…</p>}
+      {error && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      )}
 
-        {data && (
-          <>
-            <Card className="relative overflow-hidden rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 sm:rounded-3xl sm:p-7">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_220px_at_15%_-20%,rgba(91,91,214,0.15),transparent_60%)]" />
-              <div className="relative">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">Candidate workspace</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--surface-light-fg)]">
-                  Welcome, {data.profile.name || 'Candidate'}
-                </h2>
-                <p className="mt-2 max-w-2xl text-sm text-[var(--surface-light-muted)]">
-                  Track your applications, monitor interview scheduling, and access reports from one place.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Link href="/candidate/profile">
-                    <Button size="md" variant="secondary">
-                      View profile details
-                    </Button>
-                  </Link>
-                  <Link href="/candidate/applications">
-                    <Button size="md">View applied jobs</Button>
-                  </Link>
-                </div>
+      {data && (
+        <div className="space-y-10">
+          <section>
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <h2 className="font-display text-lg font-semibold text-[#0f172a]">Upcoming interviews</h2>
+              <Link href="/candidate/applications" className="text-sm font-medium text-[#5b5bd6] hover:underline">
+                All applications
+              </Link>
+            </div>
+            {upcoming.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[#e2e8f0] bg-white px-6 py-10 text-center">
+                <p className="text-sm text-[#64748b]">No interviews scheduled yet.</p>
+                <Link
+                  href="/jobs"
+                  className="mt-4 inline-flex rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e293b]"
+                >
+                  Browse open jobs
+                </Link>
               </div>
-            </Card>
-
-            {upcoming.length > 0 && (
+            ) : (
               <div className="space-y-3">
-                <h2 className="text-lg font-semibold text-[var(--surface-light-fg)]">Upcoming interviews</h2>
                 {upcoming.map((app) => (
                   <CandidateInterviewCard
                     key={app.id}
@@ -102,45 +75,40 @@ export default function CandidateDashboardPage() {
                 ))}
               </div>
             )}
+          </section>
 
-            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 md:grid-cols-3">
-              <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Total applications</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--surface-light-fg)]">{data.applications.length}</p>
-              </Card>
-              <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Interviews scheduled</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--surface-light-fg)]">
-                  {data.applications.filter((app) => Boolean(app.schedule)).length}
-                </p>
-              </Card>
-              <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 sm:p-5">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">Reports available</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--surface-light-fg)]">
-                  {data.applications.filter((app) => Boolean(app.schedule?.reportUrl)).length}
-                </p>
-              </Card>
-            </div>
-
-            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-[var(--surface-light-fg)]">Quick Actions</h2>
-                <Link href="/jobs" className="text-sm font-medium text-[var(--accent)] hover:underline">
-                  Apply to more jobs
-                </Link>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Link href="/candidate/profile">
-                  <Button variant="secondary" size="md">Open profile page</Button>
-                </Link>
-                <Link href="/candidate/applications">
-                  <Button size="md">Open applied jobs page</Button>
-                </Link>
-              </div>
-            </Card>
-          </>
-        )}
-      </div>
-    </AppShell>
+          <section>
+            <h2 className="mb-4 font-display text-lg font-semibold text-[#0f172a]">Recent applications</h2>
+            {recent.length === 0 ? (
+              <p className="text-sm text-[#64748b]">You haven&apos;t applied to any roles yet.</p>
+            ) : (
+              <ul className="divide-y divide-[#e2e8f0] overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white">
+                {recent.map((app) => (
+                  <li key={app.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                    <div>
+                      <p className="font-medium text-[#0f172a]">
+                        {app.position.title}
+                        {app.position.companyName ? (
+                          <span className="font-normal text-[#64748b]"> · {app.position.companyName}</span>
+                        ) : null}
+                      </p>
+                      <p className="mt-0.5 text-xs capitalize text-[#64748b]">
+                        {app.status.replace(/_/g, ' ')}
+                      </p>
+                    </div>
+                    <Link
+                      href="/candidate/applications"
+                      className="text-sm font-medium text-[#5b5bd6] hover:underline"
+                    >
+                      View
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
+    </CandidateShell>
   );
 }

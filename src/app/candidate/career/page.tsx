@@ -2,12 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
-import { CandidateSubnav } from '@/components/layout/CandidateSubnav';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { CandidateShell } from '@/components/layout/CandidateShell';
+import { api } from '@/lib/api';
 
 const ROLE_OPTIONS = ['technical', 'behavioral', 'sales', 'customer_success', 'engineering', 'product'];
 const LOCATION_HINTS = ['Remote', 'New York', 'San Francisco', 'London', 'Berlin', 'Toronto', 'Hybrid'];
@@ -66,10 +63,10 @@ export default function CandidateCareerPage() {
     setSaving(true);
     try {
       await api.candidateUpdateCareerPreferences({
-        preferredRoles: preferredRoles,
-        preferredLocations: preferredLocations,
-        careerGoals: careerGoals,
-        autoApplyEnabled: autoApplyEnabled,
+        preferredRoles,
+        preferredLocations,
+        careerGoals,
+        autoApplyEnabled,
       });
       toast.success('Career preferences saved.');
     } catch (e) {
@@ -92,127 +89,132 @@ export default function CandidateCareerPage() {
     }
   };
 
+  const segmentClass = (active: boolean) =>
+    `rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+      active
+        ? 'bg-[#0f172a] text-white'
+        : 'bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]'
+    }`;
+
   return (
-    <AppShell
+    <CandidateShell
       title="Career"
-      subtitle="Set your preferences and apply to matching jobs"
-      backHref="/candidate/dashboard"
-      backLabel="Dashboard"
-      theme="light"
+      subtitle="Tell us what you’re looking for so we can match you better."
     >
-      <div className="space-y-6">
-        <CandidateSubnav />
-        {loading && <p className="text-sm text-[var(--surface-light-muted)]">Loading…</p>}
-        {error && (
-          <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">
-            {error}
-          </p>
-        )}
+      {loading && <p className="text-sm text-[#64748b]">Loading…</p>}
+      {error && (
+        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      )}
 
-        {!loading && (
-          <>
-            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
-              <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Preferred roles</h3>
-              <p className="mt-1 text-sm text-[var(--surface-light-muted)]">
-                Select roles you want to be matched with. Leave empty to match all.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {ROLE_OPTIONS.map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => toggleRole(role)}
-                    className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                      preferredRoles.includes(role)
-                        ? 'bg-[var(--accent)] text-white'
-                        : 'bg-[var(--surface-light-input)] text-[var(--surface-light-fg)] hover:bg-[var(--accent-muted)]'
-                    }`}
-                  >
-                    {role}
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
-              <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Preferred locations</h3>
-              <p className="mt-1 text-sm text-[var(--surface-light-muted)]">
-                Add locations (e.g. Remote, City name). Leave empty to match all.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <input
-                  type="text"
-                  value={locationInput}
-                  onChange={(e) => setLocationInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addLocation())}
-                  placeholder="Add location"
-                  className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-2 text-sm text-[var(--surface-light-fg)]"
-                />
-                <Button size="md" variant="secondary" onClick={addLocation}>
-                  Add
-                </Button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {preferredLocations.map((loc) => (
-                  <span
-                    key={loc}
-                    className="inline-flex items-center gap-1 rounded-xl bg-[var(--accent-muted)] px-3 py-1.5 text-sm text-[var(--accent)]"
-                  >
-                    {loc}
-                    <button type="button" onClick={() => removeLocation(loc)} className="hover:opacity-80" aria-label="Remove">
-                      ×
-                    </button>
-                  </span>
-                ))}
-                {LOCATION_HINTS.filter((l) => !preferredLocations.includes(l)).map((loc) => (
-                  <button
-                    key={loc}
-                    type="button"
-                    onClick={() => setPreferredLocations((p) => [...p, loc])}
-                    className="rounded-xl border border-[var(--surface-light-border)] px-3 py-1.5 text-sm text-[var(--surface-light-muted)] hover:bg-[var(--surface-light-input)]"
-                  >
-                    + {loc}
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
-              <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Career goals</h3>
-              <textarea
-                value={careerGoals}
-                onChange={(e) => setCareerGoals(e.target.value)}
-                placeholder="Short description of your career goals (optional)"
-                rows={3}
-                className="mt-2 w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-sm text-[var(--surface-light-fg)]"
-              />
-            </Card>
-
-            <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
-              <label className="flex cursor-pointer items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={autoApplyEnabled}
-                  onChange={(e) => setAutoApplyEnabled(e.target.checked)}
-                  className="h-4 w-4 rounded border-[var(--surface-light-border)]"
-                />
-                <span className="text-sm font-medium text-[var(--surface-light-fg)]">
-                  Save “auto-apply” preference (use the button below to run it)
-                </span>
-              </label>
-            </Card>
-
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : 'Save preferences'}
-              </Button>
-              <Button variant="secondary" onClick={handleAutoApply} disabled={applying}>
-                {applying ? 'Applying…' : 'Apply to matching jobs now'}
-              </Button>
+      {!loading && (
+        <div className="space-y-6">
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
+            <h3 className="font-display text-base font-semibold text-[#0f172a]">Preferred roles</h3>
+            <p className="mt-1 text-sm text-[#64748b]">Select roles to match. Leave empty to match all.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {ROLE_OPTIONS.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => toggleRole(role)}
+                  className={segmentClass(preferredRoles.includes(role))}
+                >
+                  {role.replace(/_/g, ' ')}
+                </button>
+              ))}
             </div>
-          </>
-        )}
-      </div>
-    </AppShell>
+          </section>
+
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
+            <h3 className="font-display text-base font-semibold text-[#0f172a]">Preferred locations</h3>
+            <p className="mt-1 text-sm text-[#64748b]">Add locations (e.g. Remote). Leave empty to match all.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addLocation())}
+                placeholder="Add location"
+                className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20"
+              />
+              <button
+                type="button"
+                onClick={addLocation}
+                className="rounded-xl border border-[#e2e8f0] px-4 py-2 text-sm font-semibold text-[#0f172a] hover:bg-[#f8fafc]"
+              >
+                Add
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {preferredLocations.map((loc) => (
+                <span
+                  key={loc}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#f1f5f9] px-3 py-1.5 text-sm text-[#334155]"
+                >
+                  {loc}
+                  <button type="button" onClick={() => removeLocation(loc)} className="text-[#94a3b8] hover:text-[#0f172a]" aria-label="Remove">
+                    ×
+                  </button>
+                </span>
+              ))}
+              {LOCATION_HINTS.filter((l) => !preferredLocations.includes(l)).map((loc) => (
+                <button
+                  key={loc}
+                  type="button"
+                  onClick={() => setPreferredLocations((p) => [...p, loc])}
+                  className="rounded-lg border border-dashed border-[#cbd5e1] px-3 py-1.5 text-sm text-[#64748b] hover:border-[#94a3b8]"
+                >
+                  + {loc}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
+            <h3 className="font-display text-base font-semibold text-[#0f172a]">Career goals</h3>
+            <textarea
+              value={careerGoals}
+              onChange={(e) => setCareerGoals(e.target.value)}
+              placeholder="Optional — a short note on what you’re aiming for"
+              rows={3}
+              className="mt-3 w-full rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20"
+            />
+          </section>
+
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
+            <label className="flex cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                checked={autoApplyEnabled}
+                onChange={(e) => setAutoApplyEnabled(e.target.checked)}
+                className="h-4 w-4 rounded border-[#cbd5e1]"
+              />
+              <span className="text-sm font-medium text-[#0f172a]">
+                Remember auto-apply preference (use the button below to run it)
+              </span>
+            </label>
+          </section>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-xl bg-[#0f172a] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+            >
+              {saving ? 'Saving…' : 'Save preferences'}
+            </button>
+            <button
+              type="button"
+              onClick={handleAutoApply}
+              disabled={applying}
+              className="rounded-xl border border-[#e2e8f0] bg-white px-5 py-2.5 text-sm font-semibold text-[#0f172a] transition hover:bg-[#f8fafc] disabled:opacity-60"
+            >
+              {applying ? 'Applying…' : 'Apply to matching jobs now'}
+            </button>
+          </div>
+        </div>
+      )}
+    </CandidateShell>
   );
 }

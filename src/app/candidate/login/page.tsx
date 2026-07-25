@@ -3,16 +3,19 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { IntervionLogo } from '@/components/ui/IntervionLogo';
+import {
+  CandidateAuthLayout,
+  candidateAuthInputClass,
+  candidateAuthLabelClass,
+  candidateAuthPrimaryBtnClass,
+} from '@/components/layout/CandidateAuthLayout';
 import { api } from '@/lib/api';
 import { clearOtherRoles } from '@/lib/session';
 
 export default function CandidateLoginPage() {
   const router = useRouter();
   const search = useSearchParams();
-  const next = search.get('next') || '/jobs';
+  const next = search.get('next') || '/candidate/dashboard';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,64 +43,65 @@ export default function CandidateLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--surface-light)] px-4 py-12">
-      <div className="w-full max-w-md">
-        <Card className="rounded-3xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-8 shadow-lg">
-          <div className="mb-8 flex flex-col items-center text-center">
-            <IntervionLogo className="mb-4 h-10" />
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--surface-light-fg)]">Candidate sign in</h1>
-            <p className="mt-2 text-sm font-medium text-[var(--surface-light-muted)]">Log in to apply for jobs and track your applications.</p>
-          </div>
-          {resetSuccess && (
-            <p className="mt-4 rounded-xl bg-green-100 dark:bg-green-900/30 px-4 py-3 text-sm text-green-800 dark:text-green-200">
-              Password updated. You can log in with your new password.
-            </p>
-          )}
-          <form className="space-y-5" onSubmit={submit}>
-            <div>
-              <label htmlFor="candidate-email" className="mb-1.5 block text-sm font-semibold text-[var(--surface-light-fg)]">Email</label>
-              <input
-                id="candidate-email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-              />
-            </div>
-            <div>
-              <label htmlFor="candidate-password" className="mb-1.5 block text-sm font-semibold text-[var(--surface-light-fg)]">Password</label>
-              <input
-                id="candidate-password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-[var(--surface-light-fg)] placeholder-[var(--surface-light-muted)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-              />
-            </div>
-            <p className="text-right">
-              <Link href="/candidate/forgot-password" className="text-sm font-medium text-[var(--accent)] hover:underline">
-                Forgot password?
-              </Link>
-            </p>
-            {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
-            <Button type="submit" disabled={loading} className="w-full justify-center">
-              {loading ? 'Logging in…' : 'Login'}
-            </Button>
-          </form>
-          <p className="mt-5 text-sm text-[var(--surface-light-muted)]">
-            New user?{' '}
-            <Link href={`/candidate/signup?next=${encodeURIComponent(next)}`} className="font-medium text-[var(--accent)] hover:underline">
-              Create account
-            </Link>
-          </p>
-        </Card>
-      </div>
-    </div>
+    <CandidateAuthLayout
+      title="Sign in"
+      subtitle="Access your applications, interview links, and reports."
+    >
+      {resetSuccess && (
+        <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Password updated. You can sign in with your new password.
+        </p>
+      )}
+      <form className="space-y-4" onSubmit={submit}>
+        <div>
+          <label htmlFor="candidate-email" className={candidateAuthLabelClass}>
+            Email
+          </label>
+          <input
+            id="candidate-email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
+            className={candidateAuthInputClass}
+          />
+        </div>
+        <div>
+          <label htmlFor="candidate-password" className={candidateAuthLabelClass}>
+            Password
+          </label>
+          <input
+            id="candidate-password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            className={candidateAuthInputClass}
+          />
+        </div>
+        <p className="text-right">
+          <Link href="/candidate/forgot-password" className="text-sm font-medium text-[#5b5bd6] hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+      <p className="mt-5 text-sm text-[#64748b]">
+        New here?{' '}
+        <Link
+          href={`/candidate/signup?next=${encodeURIComponent(next)}`}
+          className="font-medium text-[#5b5bd6] hover:underline"
+        >
+          Create an account
+        </Link>
+      </p>
+    </CandidateAuthLayout>
   );
 }

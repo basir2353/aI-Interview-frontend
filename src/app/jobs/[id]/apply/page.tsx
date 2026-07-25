@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { AppShell } from '@/components/layout/AppShell';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { api, type PublicJob } from '@/lib/api';
+
+const fieldClass =
+  'w-full rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20';
+const labelClass = 'mb-1.5 block text-sm font-medium text-[#334155]';
 
 export default function ApplyJobPage() {
   const params = useParams<{ id: string }>();
@@ -108,112 +111,119 @@ export default function ApplyJobPage() {
   };
 
   return (
-    <AppShell title="Apply for Job" subtitle="Complete your profile and upload resume" backHref="/jobs" backLabel="Jobs" theme="light">
-      <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-5">
-        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 lg:col-span-2">
-          {loading && <p className="text-sm text-[var(--surface-light-muted)] font-medium">Loading job details…</p>}
+    <div className="min-h-screen bg-[#f4f6f8] text-[#0f172a]">
+      <header className="border-b border-[#e2e8f0] bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
+          <Link href="/jobs" className="flex items-center gap-2 text-sm font-medium text-[#64748b] hover:text-[#0f172a]">
+            ← Jobs
+          </Link>
+          <IntervionLogo className="h-7" />
+        </div>
+      </header>
+
+      <main className="mx-auto grid max-w-5xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-5">
+        <aside className="rounded-2xl border border-[#e2e8f0] bg-white p-6 lg:col-span-2">
+          {loading && <p className="text-sm text-[#64748b]">Loading job…</p>}
           {!loading && job && (
             <div className="space-y-3">
-              <h2 className="text-xl font-semibold text-[var(--surface-light-fg)]">{job.title}</h2>
-              {job.company_name && (
-                <p className="inline-flex items-center rounded-full border border-[var(--surface-light-border)] bg-[var(--accent-muted)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
-                  {job.company_name}
-                </p>
-              )}
-              <p className="text-sm text-[var(--surface-light-muted)]">
-                {job.role} {job.location ? `• ${job.location}` : ''}
+              <h1 className="font-display text-xl font-semibold tracking-tight">{job.title}</h1>
+              {job.company_name && <p className="text-sm font-medium text-[#475569]">{job.company_name}</p>}
+              <p className="text-sm text-[#64748b]">
+                {job.role}
+                {job.location ? ` · ${job.location}` : ''}
               </p>
-              {job.salary_range && <p className="text-sm text-[var(--surface-light-muted)]">Salary: {job.salary_range}</p>}
-              {job.description && <p className="pt-2 text-sm leading-6 text-[var(--surface-light-fg)]">{job.description}</p>}
+              {job.salary_range && <p className="text-sm text-[#475569]">{job.salary_range}</p>}
+              {job.description && (
+                <p className="border-t border-[#f1f5f9] pt-4 text-sm leading-relaxed text-[#64748b]">{job.description}</p>
+              )}
             </div>
           )}
-        </Card>
+        </aside>
 
-        <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 lg:col-span-3">
-          <h3 className="text-lg font-semibold text-[var(--surface-light-fg)]">Application Form</h3>
-          <p className="mt-1 text-sm text-[var(--surface-light-muted)] font-medium">Upload your resume and fill in your details.</p>
+        <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6 lg:col-span-3">
+          <h2 className="font-display text-lg font-semibold">Your application</h2>
+          <p className="mt-1 text-sm text-[#64748b]">Upload a resume and confirm your details.</p>
 
-          <form className="mt-5 grid gap-4" onSubmit={submitApplication}>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Full name *"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email address *"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone number"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="Current location"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="url"
-              value={linkedinUrl}
-              onChange={(e) => setLinkedinUrl(e.target.value)}
-              placeholder="LinkedIn profile URL"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
-            <input
-              type="url"
-              value={portfolioUrl}
-              onChange={(e) => setPortfolioUrl(e.target.value)}
-              placeholder="Portfolio / GitHub URL"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
+          <form className="mt-6 grid gap-4" onSubmit={submitApplication}>
+            <div>
+              <label htmlFor="ap-name" className={labelClass}>
+                Full name
+              </label>
+              <input id="ap-name" type="text" required value={name} onChange={(e) => setName(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label htmlFor="ap-email" className={labelClass}>
+                Email
+              </label>
+              <input id="ap-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label htmlFor="ap-phone" className={labelClass}>
+                Phone
+              </label>
+              <input id="ap-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label htmlFor="ap-location" className={labelClass}>
+                Location
+              </label>
+              <input id="ap-location" type="text" value={location} onChange={(e) => setLocation(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label htmlFor="ap-li" className={labelClass}>
+                LinkedIn URL
+              </label>
+              <input id="ap-li" type="url" value={linkedinUrl} onChange={(e) => setLinkedinUrl(e.target.value)} className={fieldClass} />
+            </div>
+            <div>
+              <label htmlFor="ap-pf" className={labelClass}>
+                Portfolio / GitHub
+              </label>
+              <input id="ap-pf" type="url" value={portfolioUrl} onChange={(e) => setPortfolioUrl(e.target.value)} className={fieldClass} />
+            </div>
 
-            <div className="rounded-xl border border-dashed border-[var(--surface-light-border)] bg-[var(--accent-muted)] p-4">
-              <label className="mb-2 block text-sm font-medium text-[var(--surface-light-fg)]">Upload resume (PDF/DOC/DOCX) *</label>
+            <div className="rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-4">
+              <label className={labelClass}>Resume (PDF / DOC / DOCX)</label>
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={(e) => {
-                  const file = e.target.files?.[0] ?? null;
-                  void handleResumeUpload(file);
+                  void handleResumeUpload(e.target.files?.[0] ?? null);
                 }}
-                className="block w-full text-sm text-[var(--surface-light-fg)] file:mr-3 file:rounded-full file:border-0 file:bg-[var(--accent)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-[var(--accent-hover)]"
+                className="block w-full text-sm text-[#475569] file:mr-3 file:rounded-lg file:border-0 file:bg-[#0f172a] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
               />
-              {uploadingResume && <p className="mt-2 text-xs font-medium text-[var(--surface-light-muted)]">Uploading resume…</p>}
-              {uploadedResumeUrl && <p className="mt-2 text-xs text-[var(--success-text)]">Resume uploaded successfully.</p>}
+              {uploadingResume && <p className="mt-2 text-xs text-[#64748b]">Uploading…</p>}
+              {uploadedResumeUrl && <p className="mt-2 text-xs text-emerald-700">Resume uploaded.</p>}
             </div>
 
-            <textarea
-              rows={5}
-              value={coverLetter}
-              onChange={(e) => setCoverLetter(e.target.value)}
-              placeholder="Cover letter / why you are a good fit"
-              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-            />
+            <div>
+              <label htmlFor="ap-cover" className={labelClass}>
+                Cover letter
+              </label>
+              <textarea
+                id="ap-cover"
+                rows={5}
+                value={coverLetter}
+                onChange={(e) => setCoverLetter(e.target.value)}
+                placeholder="Optional — why you’re a strong fit"
+                className={fieldClass}
+              />
+            </div>
 
             {error && (
-              <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
+              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
             )}
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={submitLoading || uploadingResume} size="md" className="disabled:opacity-50">
-                {submitLoading ? 'Submitting…' : 'Submit application'}
-              </Button>
-            </div>
+            <button
+              type="submit"
+              disabled={submitLoading || uploadingResume}
+              className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+            >
+              {submitLoading ? 'Submitting…' : 'Submit application'}
+            </button>
           </form>
-        </Card>
-      </div>
-    </AppShell>
+        </section>
+      </main>
+    </div>
   );
 }

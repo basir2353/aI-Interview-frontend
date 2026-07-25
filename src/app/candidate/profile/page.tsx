@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AppShell } from '@/components/layout/AppShell';
-import { CandidateSubnav } from '@/components/layout/CandidateSubnav';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { CandidateShell } from '@/components/layout/CandidateShell';
 import { api, type CandidateIdentity } from '@/lib/api';
 
 export default function CandidateProfilePage() {
@@ -34,54 +31,62 @@ export default function CandidateProfilePage() {
   }, [router]);
 
   return (
-    <AppShell
-      title="Profile Details"
-      subtitle="Your saved account and professional details"
-      backHref="/candidate/dashboard"
-      backLabel="Dashboard"
-      theme="light"
-      actions={
-        <Button
-          variant="secondary"
-          size="md"
-          onClick={() => {
-            localStorage.removeItem('candidateToken');
-            localStorage.removeItem('candidateName');
-            localStorage.removeItem('candidateEmail');
-            router.replace('/candidate/login');
-          }}
-        >
-          Logout
-        </Button>
-      }
-    >
-      <div className="space-y-6">
-        <CandidateSubnav />
-        {loading && <p className="text-sm text-[var(--surface-light-muted)] font-medium">Loading profile…</p>}
-        {error && <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>}
-        {profile && (
-          <Card className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-7 shadow-sm">
-            <h2 className="text-lg font-semibold text-[var(--surface-light-fg)]">Personal Information</h2>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+    <CandidateShell title="Profile" subtitle="Account details used when you apply to roles.">
+      {loading && <p className="text-sm font-medium text-[#64748b]">Loading profile…</p>}
+      {error && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+      )}
+      {profile && (
+        <div className="space-y-6">
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6 sm:p-7">
+            <h2 className="font-display text-base font-semibold text-[#0f172a]">Identity</h2>
+            <dl className="mt-5 grid gap-5 sm:grid-cols-2">
               <Field label="Full name" value={profile.name} />
               <Field label="Email" value={profile.email} />
+            </dl>
+          </section>
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6 sm:p-7">
+            <h2 className="font-display text-base font-semibold text-[#0f172a]">Contact</h2>
+            <dl className="mt-5 grid gap-5 sm:grid-cols-2">
               <Field label="Phone" value={profile.phone} />
               <Field label="Location" value={profile.location} />
-              <Field label="LinkedIn" value={profile.linkedinUrl} />
-              <Field label="Portfolio / GitHub" value={profile.portfolioUrl} />
-            </div>
-          </Card>
-        )}
-      </div>
-    </AppShell>
+            </dl>
+          </section>
+          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6 sm:p-7">
+            <h2 className="font-display text-base font-semibold text-[#0f172a]">Links</h2>
+            <dl className="mt-5 grid gap-5 sm:grid-cols-2">
+              <Field label="LinkedIn" value={profile.linkedinUrl} link />
+              <Field label="Portfolio / GitHub" value={profile.portfolioUrl} link />
+            </dl>
+          </section>
+        </div>
+      )}
+    </CandidateShell>
   );
 }
 
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
+function Field({
+  label,
+  value,
+  link,
+}: {
+  label: string;
+  value: string | null | undefined;
+  link?: boolean;
+}) {
+  const display = value?.trim() || '—';
   return (
-    <div className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">{label}</p>
-      <p className="mt-1 text-sm text-[var(--surface-light-fg)] break-words">{value || '-'}</p>
+    <div>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[#94a3b8]">{label}</dt>
+      <dd className="mt-1.5 text-sm text-[#0f172a] break-words">
+        {link && value?.trim() ? (
+          <a href={value} target="_blank" rel="noreferrer" className="text-[#5b5bd6] hover:underline">
+            {display}
+          </a>
+        ) : (
+          display
+        )}
+      </dd>
     </div>
   );
 }

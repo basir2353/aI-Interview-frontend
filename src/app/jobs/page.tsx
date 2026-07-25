@@ -2,9 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AppShell } from '@/components/layout/AppShell';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { IntervionLogo } from '@/components/ui/IntervionLogo';
+import { BRAND_NAME } from '@/lib/brand';
 import { api, type PublicJob } from '@/lib/api';
 import type { InterviewRole } from '@/types';
 
@@ -41,7 +40,6 @@ function isTimeSlotMatch(dateIso: string, slot: string): boolean {
   const postedAtMs = new Date(dateIso).getTime();
   const now = Date.now();
   const diffMs = now - postedAtMs;
-
   const dayMs = 24 * 60 * 60 * 1000;
   if (slot === '24h') return diffMs <= dayMs;
   if (slot === '2d') return diffMs <= 2 * dayMs;
@@ -111,22 +109,18 @@ export default function JobsPage() {
 
     const next = jobs.filter((job) => {
       if (selectedRole && job.role !== selectedRole) return false;
-
       if (query) {
         const haystack = `${job.title} ${job.company_name ?? ''} ${job.location ?? ''} ${job.description ?? ''}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
-
       const createdAtMs = new Date(job.created_at).getTime();
       if (exactDateStart && createdAtMs < exactDateStart) return false;
       if (exactDateEnd && createdAtMs > exactDateEnd) return false;
       if (!isTimeSlotMatch(job.created_at, timeSlot)) return false;
-
       const salary = parseSalaryRange(job.salary_range);
       if (minSalaryFilter !== null && salary.max !== null && salary.max < minSalaryFilter) return false;
       if (maxSalaryFilter !== null && salary.min !== null && salary.min > maxSalaryFilter) return false;
       if (minSalaryFilter !== null && maxSalaryFilter !== null && salary.min === null && salary.max === null) return false;
-
       return true;
     });
 
@@ -155,177 +149,153 @@ export default function JobsPage() {
   };
 
   const inputClass =
-    'rounded-xl border border-[var(--landing-border)] bg-white/5 px-4 py-3 text-sm text-[var(--landing-text)] placeholder:text-[var(--landing-muted)]/70 outline-none transition-colors focus:border-[var(--landing-accent)] focus:ring-2 focus:ring-[var(--landing-accent)]/30';
+    'rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20';
 
   return (
-    <AppShell
-      title="Open Jobs"
-      subtitle="Find the right role and apply in minutes"
-      backHref="/"
-      backLabel="Home"
-      theme="landing"
-    >
-      <div className="space-y-8">
-        <Card className="rounded-2xl p-6 sm:p-8">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight text-[var(--landing-text)] sm:text-xl">
-                Search & Filter Jobs
-              </h2>
-              <p className="mt-1 text-sm font-medium text-[var(--landing-muted)]">
-                Use filters like date, time, role, and salary to narrow results.
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full border border-[var(--landing-border)] bg-[var(--landing-accent-solid)]/20 px-3 py-1.5 text-xs font-semibold text-[var(--landing-accent)]">
-                {filteredJobs.length} result{filteredJobs.length !== 1 ? 's' : ''}
-              </span>
-              <Button size="md" variant="secondary" onClick={resetFilters}>
-                Reset filters
-              </Button>
-            </div>
+    <div className="min-h-screen bg-[#f4f6f8] text-[#0f172a]">
+      <header className="border-b border-[#e2e8f0] bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <Link href="/" className="flex items-center gap-2.5">
+            <IntervionLogo className="h-8" />
+            <span className="font-display text-sm font-semibold tracking-tight">{BRAND_NAME}</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            {candidateLoggedIn ? (
+              <Link
+                href="/candidate/dashboard"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748b] hover:text-[#0f172a]"
+              >
+                My workspace
+              </Link>
+            ) : (
+              <Link
+                href="/candidate/login?next=/jobs"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748b] hover:text-[#0f172a]"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
+        </div>
+      </header>
 
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-8">
+          <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Open roles</h1>
+          <p className="mt-2 text-sm text-[#64748b] sm:text-base">Find a role and apply in a few minutes.</p>
+        </div>
+
+        <section className="mb-8 rounded-2xl border border-[#e2e8f0] bg-white p-5 sm:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium text-[#475569]">
+              {filteredJobs.length} result{filteredJobs.length !== 1 ? 's' : ''}
+            </p>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-sm font-medium text-[#5b5bd6] hover:underline"
+            >
+              Reset filters
+            </button>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <input
               type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Search title, company, location..."
+              placeholder="Search title, company…"
               className={inputClass}
             />
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className={inputClass}
-            >
+            <select value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)} className={inputClass}>
               <option value="">All roles</option>
               <option value="technical">Technical</option>
               <option value="behavioral">Behavioral</option>
               <option value="sales">Sales</option>
               <option value="customer_success">Customer Success</option>
             </select>
-            <input
-              type="number"
-              min={0}
-              value={minSalary}
-              onChange={(e) => setMinSalary(e.target.value)}
-              placeholder="Min salary"
-              className={inputClass}
-            />
-            <input
-              type="number"
-              min={0}
-              value={maxSalary}
-              onChange={(e) => setMaxSalary(e.target.value)}
-              placeholder="Max salary"
-              className={inputClass}
-            />
-            <input
-              type="date"
-              value={postedDate}
-              onChange={(e) => setPostedDate(e.target.value)}
-              className={inputClass}
-            />
-            <select
-              value={timeSlot}
-              onChange={(e) => setTimeSlot(e.target.value)}
-              className={inputClass}
-            >
+            <input type="number" min={0} value={minSalary} onChange={(e) => setMinSalary(e.target.value)} placeholder="Min salary" className={inputClass} />
+            <input type="number" min={0} value={maxSalary} onChange={(e) => setMaxSalary(e.target.value)} placeholder="Max salary" className={inputClass} />
+            <input type="date" value={postedDate} onChange={(e) => setPostedDate(e.target.value)} className={inputClass} />
+            <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className={inputClass}>
               <option value="">Any posted time</option>
               <option value="24h">Past 24 hours</option>
               <option value="2d">Last 2 days</option>
               <option value="3d">Last 3 days</option>
-              <option value="4d">Last 4 days</option>
-              <option value="5d">Last 5 days</option>
-              <option value="6d">Last 6 days</option>
               <option value="7d">Last 7 days</option>
             </select>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'salary_high' | 'salary_low')}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
               className={inputClass}
             >
-              <option value="newest">Sort: Newest first</option>
-              <option value="oldest">Sort: Oldest first</option>
-              <option value="salary_high">Sort: Salary high to low</option>
-              <option value="salary_low">Sort: Salary low to high</option>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="salary_high">Salary high → low</option>
+              <option value="salary_low">Salary low → high</option>
             </select>
           </div>
-        </Card>
+        </section>
 
-        {loading && (
-          <p className="text-[var(--landing-muted)] font-medium">Loading jobs…</p>
-        )}
+        {loading && <p className="text-sm text-[#64748b]">Loading jobs…</p>}
         {error && (
-          <div className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">
-            {error}
-          </div>
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
         {!loading && filteredJobs.length === 0 && (
-          <Card className="rounded-2xl p-8 text-center">
-            <p className="text-[var(--landing-muted)]">
-              No jobs match your filters. Try adjusting your search criteria.
-            </p>
-          </Card>
+          <div className="rounded-2xl border border-dashed border-[#e2e8f0] bg-white px-6 py-12 text-center text-sm text-[#64748b]">
+            No jobs match your filters.
+          </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {filteredJobs.map((job) => {
             const status = applicationStatusByPosition[job.id] || null;
             return (
-              <Card key={job.id} className="rounded-2xl p-6 transition-shadow hover:shadow-lg hover:shadow-[var(--landing-accent-solid)]/10">
+              <article
+                key={job.id}
+                className="rounded-2xl border border-[#e2e8f0] bg-white p-5 transition hover:border-[#cbd5e1] sm:p-6"
+              >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold tracking-tight text-[var(--landing-text)] sm:text-xl">
+                    <h2 className="font-display text-lg font-semibold tracking-tight text-[#0f172a]">
                       {job.title}
                     </h2>
-                    {job.company_name && (
-                      <span className="mt-2 inline-flex items-center rounded-full border border-[var(--landing-border)] bg-[var(--landing-accent-solid)]/15 px-3 py-1 text-xs font-semibold text-[var(--landing-accent)]">
-                        {job.company_name}
-                      </span>
-                    )}
-                    <p className="mt-2 text-sm font-medium text-[var(--landing-muted)]">
+                    <p className="mt-1 text-sm text-[#64748b]">
+                      {job.company_name ? `${job.company_name} · ` : ''}
                       {roleLabel(job.role)}
                       {job.location ? ` · ${job.location}` : ''}
                     </p>
-                    <p className="mt-0.5 text-xs text-[var(--landing-muted)]/80">
-                      Posted: {new Date(job.created_at).toLocaleString()}
-                    </p>
                     {job.salary_range && (
-                      <p className="mt-1 text-sm text-[var(--landing-muted)]">Salary: {job.salary_range}</p>
+                      <p className="mt-1 text-sm text-[#475569]">{job.salary_range}</p>
                     )}
                     {status && (
-                      <span className="mt-2 inline-flex rounded-full border border-[var(--success-border)] bg-[var(--success-bg)] px-3 py-1 text-xs font-semibold text-[var(--success-text)]">
-                        Applied ({status.replaceAll('_', ' ')})
-                      </span>
+                      <p className="mt-2 text-xs font-medium capitalize text-emerald-700">
+                        Applied · {status.replaceAll('_', ' ')}
+                      </p>
                     )}
                   </div>
-                  <div className="shrink-0">
-                    <Link href={candidateLoggedIn ? `/jobs/${job.id}/apply` : `/candidate/login?next=/jobs/${job.id}/apply`}>
-                      <Button size="md" variant={status ? 'secondary' : 'primary'}>
-                        {status ? 'View application' : 'Apply'}
-                      </Button>
-                    </Link>
-                  </div>
+                  <Link
+                    href={
+                      candidateLoggedIn ? `/jobs/${job.id}/apply` : `/candidate/login?next=/jobs/${job.id}/apply`
+                    }
+                    className={`shrink-0 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${
+                      status
+                        ? 'border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]'
+                        : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
+                    }`}
+                  >
+                    {status ? 'View application' : 'Apply'}
+                  </Link>
                 </div>
-
                 {job.description && (
-                  <p className="mt-4 border-t border-[var(--landing-border)]/60 pt-4 text-sm leading-6 text-[var(--landing-muted)]">
+                  <p className="mt-4 border-t border-[#f1f5f9] pt-4 text-sm leading-relaxed text-[#64748b] line-clamp-3">
                     {job.description}
                   </p>
                 )}
-                {job.requirements && (
-                  <p className="mt-3 text-sm leading-6 text-[var(--landing-muted)]">
-                    <span className="font-semibold text-[var(--landing-text)]">Requirements:</span>{' '}
-                    {job.requirements}
-                  </p>
-                )}
-              </Card>
+              </article>
             );
           })}
         </div>
-      </div>
-    </AppShell>
+      </main>
+    </div>
   );
 }

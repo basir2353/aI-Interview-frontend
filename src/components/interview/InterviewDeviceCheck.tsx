@@ -76,23 +76,21 @@ export function InterviewDeviceCheck({
   const barWidth = `${Math.min(100, 12 + micLevel * 220)}%`;
 
   const shell = isLight
-    ? 'bg-[var(--surface-light)] text-[var(--surface-light-fg)]'
-    : 'bg-[#0c0a12] text-white';
+    ? 'bg-[#f4f6f8] text-[#0f172a]'
+    : 'bg-[#0f1419] text-[#e8e4d9]';
 
   return (
     <div className={`fixed inset-0 z-[200] flex min-h-screen flex-col overflow-hidden ${shell}`}>
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {isLight ? (
           <>
-            <div className="absolute -left-1/4 top-[-20%] h-[70vh] w-[70vh] rounded-full bg-violet-400/20 blur-[120px]" />
-            <div className="absolute -right-1/4 bottom-[-10%] h-[60vh] w-[60vh] rounded-full bg-fuchsia-400/15 blur-[100px]" />
-            <div className="absolute left-1/2 top-1/2 h-[40vh] w-[40vh] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-400/10 blur-[80px]" />
+            <div className="absolute -left-1/4 top-[-20%] h-[70vh] w-[70vh] rounded-full bg-sky-300/20 blur-[120px]" />
+            <div className="absolute -right-1/4 bottom-[-10%] h-[60vh] w-[60vh] rounded-full bg-slate-400/15 blur-[100px]" />
           </>
         ) : (
           <>
-            <div className="absolute -left-1/4 top-[-20%] h-[70vh] w-[70vh] rounded-full bg-violet-600/25 blur-[120px]" />
-            <div className="absolute -right-1/4 bottom-[-10%] h-[60vh] w-[60vh] rounded-full bg-fuchsia-500/20 blur-[100px]" />
-            <div className="absolute left-1/2 top-1/2 h-[40vh] w-[40vh] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/10 blur-[80px]" />
+            <div className="absolute -left-1/4 top-[-20%] h-[70vh] w-[70vh] rounded-full bg-sky-500/15 blur-[120px]" />
+            <div className="absolute -right-1/4 bottom-[-10%] h-[60vh] w-[60vh] rounded-full bg-amber-700/10 blur-[100px]" />
           </>
         )}
       </div>
@@ -165,7 +163,7 @@ export function InterviewDeviceCheck({
                 isLight ? 'text-[var(--surface-light-fg)]' : 'text-white/80'
               }`}
             >
-              <span className="flex h-2 w-2 rounded-full bg-violet-500 shadow-[0_0_12px_rgba(139,92,246,0.45)]" />
+              <span className="flex h-2 w-2 rounded-full bg-sky-500 shadow-[0_0_12px_rgba(14,165,233,0.45)]" />
               Microphone
             </div>
             <div
@@ -180,11 +178,11 @@ export function InterviewDeviceCheck({
               </p>
               <div
                 className={`mt-5 h-3 overflow-hidden rounded-full ring-1 ${
-                  isLight ? 'bg-violet-100 ring-[var(--surface-light-border)]' : 'bg-black/40 ring-white/10'
+                  isLight ? 'bg-sky-100 ring-[var(--surface-light-border)]' : 'bg-black/40 ring-white/10'
                 }`}
               >
                 <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-indigo-600"
+                  className="h-full rounded-full bg-gradient-to-r from-sky-600 to-slate-600"
                   animate={{ width: barWidth }}
                   transition={{ type: 'spring', stiffness: 320, damping: 28 }}
                 />
@@ -208,8 +206,8 @@ export function InterviewDeviceCheck({
             <button
               type="button"
               onClick={onNext}
-              className={`group relative w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-6 py-4 text-base font-semibold text-white shadow-[0_16px_40px_-12px_rgba(139,92,246,0.55)] transition hover:shadow-[0_20px_50px_-12px_rgba(192,132,252,0.4)] focus:outline-none focus:ring-2 focus:ring-violet-400/80 focus:ring-offset-2 ${
-                isLight ? 'focus:ring-offset-[var(--surface-light)]' : 'focus:ring-offset-[#0c0a12]'
+              className={`group relative w-full overflow-hidden rounded-2xl bg-sky-600 px-6 py-4 text-base font-semibold text-white shadow-[0_16px_40px_-12px_rgba(2,132,199,0.45)] transition hover:bg-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-400/80 focus:ring-offset-2 ${
+                isLight ? 'focus:ring-offset-[#f4f6f8]' : 'focus:ring-offset-[#0f1419]'
               }`}
             >
               <span className="relative z-10 flex items-center justify-center gap-2">

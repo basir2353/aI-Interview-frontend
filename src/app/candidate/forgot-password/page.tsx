@@ -3,9 +3,12 @@
 import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { IntervionLogo } from '@/components/ui/IntervionLogo';
+import {
+  CandidateAuthLayout,
+  candidateAuthInputClass,
+  candidateAuthLabelClass,
+  candidateAuthPrimaryBtnClass,
+} from '@/components/layout/CandidateAuthLayout';
 import { api } from '@/lib/api';
 
 type Step = 'email' | 'code' | 'password';
@@ -76,109 +79,125 @@ function ForgotPasswordContent() {
     }
   };
 
+  const subtitle =
+    step === 'email'
+      ? 'Enter your email and we’ll send a secure reset code.'
+      : step === 'code'
+        ? 'Enter the 6-digit code we sent to your email.'
+        : 'Choose a new password for your account.';
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[var(--surface-light)] px-4 py-12">
-      <div className="w-full max-w-md">
-        <Card className="rounded-3xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-8 shadow-lg">
-          <div className="mb-8 flex flex-col items-center text-center">
-            <IntervionLogo className="mb-4 h-10" />
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--surface-light-fg)]">Reset your password</h1>
-            <p className="mt-2 text-sm font-medium text-[var(--surface-light-muted)]">
-              {step === 'email' && 'Enter your email and we’ll send you a secure reset code.'}
-              {step === 'code' && 'Enter the 6-digit code we sent to your email.'}
-              {step === 'password' && 'Choose a new password.'}
-            </p>
+    <CandidateAuthLayout title="Reset password" subtitle={subtitle}>
+      {step === 'email' && (
+        <form className="space-y-4" onSubmit={submitEmail}>
+          <div>
+            <label htmlFor="fp-email" className={candidateAuthLabelClass}>
+              Email
+            </label>
+            <input
+              id="fp-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={candidateAuthInputClass}
+            />
           </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
+            {loading ? 'Sending…' : 'Send reset code'}
+          </button>
+        </form>
+      )}
 
-          {step === 'email' && (
-            <form className="mt-6 space-y-4" onSubmit={submitEmail}>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
-                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-              />
-              {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
-              <Button type="submit" disabled={loading} className="w-full justify-center">
-                {loading ? 'Sending…' : 'Send reset code'}
-              </Button>
-            </form>
-          )}
-
-          {step === 'code' && (
-            <form className="mt-6 space-y-4" onSubmit={submitCode}>
-              {success && <p className="text-sm text-green-600 dark:text-green-400">{success}</p>}
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="6-digit code"
-                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-center text-lg tracking-[0.3em] text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-              />
-              <input type="hidden" value={email} readOnly />
-              {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
-              <Button type="submit" disabled={code.length !== 6} className="w-full justify-center">
-                Continue
-              </Button>
-              <p className="text-center text-sm text-[var(--surface-light-muted)]">
-                Didn’t get the email?{' '}
-                <button
-                  type="button"
-                  onClick={() => { setStep('email'); setCode(''); setSuccess(''); }}
-                  className="font-medium text-[var(--accent)] hover:underline"
-                >
-                  Try again
-                </button>
-              </p>
-            </form>
-          )}
-
-          {step === 'password' && (
-            <form className="mt-6 space-y-4" onSubmit={submitPassword}>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="New password (min 6 characters)"
-                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-              />
-              <input
-                type="password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
-                className="w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-input)] px-4 py-3 text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
-              />
-              {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
-              {success && <p className="text-sm text-green-600 dark:text-green-400">{success}</p>}
-              <Button type="submit" disabled={loading} className="w-full justify-center">
-                {loading ? 'Updating…' : 'Update password'}
-              </Button>
-            </form>
-          )}
-
-          <p className="mt-5 text-sm text-[var(--surface-light-muted)]">
-            <Link href="/candidate/login" className="font-medium text-[var(--accent)] hover:underline">
-              Back to login
-            </Link>
+      {step === 'code' && (
+        <form className="space-y-4" onSubmit={submitCode}>
+          {success && <p className="text-sm text-emerald-700">{success}</p>}
+          <div>
+            <label htmlFor="fp-code" className={candidateAuthLabelClass}>
+              6-digit code
+            </label>
+            <input
+              id="fp-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              className={`${candidateAuthInputClass} text-center text-lg tracking-[0.3em]`}
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" disabled={code.length !== 6} className={candidateAuthPrimaryBtnClass}>
+            Continue
+          </button>
+          <p className="text-center text-sm text-[#64748b]">
+            Didn’t get the email?{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setStep('email');
+                setCode('');
+                setSuccess('');
+              }}
+              className="font-medium text-[#5b5bd6] hover:underline"
+            >
+              Try again
+            </button>
           </p>
-        </Card>
-      </div>
-    </div>
+        </form>
+      )}
+
+      {step === 'password' && (
+        <form className="space-y-4" onSubmit={submitPassword}>
+          <div>
+            <label htmlFor="fp-new" className={candidateAuthLabelClass}>
+              New password
+            </label>
+            <input
+              id="fp-new"
+              type="password"
+              required
+              minLength={6}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className={candidateAuthInputClass}
+            />
+          </div>
+          <div>
+            <label htmlFor="fp-confirm" className={candidateAuthLabelClass}>
+              Confirm password
+            </label>
+            <input
+              id="fp-confirm"
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className={candidateAuthInputClass}
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {success && <p className="text-sm text-emerald-700">{success}</p>}
+          <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
+            {loading ? 'Updating…' : 'Update password'}
+          </button>
+        </form>
+      )}
+
+      <p className="mt-5 text-sm text-[#64748b]">
+        <Link href="/candidate/login" className="font-medium text-[#5b5bd6] hover:underline">
+          Back to sign in
+        </Link>
+      </p>
+    </CandidateAuthLayout>
   );
 }
 
 export default function ForgotPasswordPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading…</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#f4f6f8]">Loading…</div>}>
       <ForgotPasswordContent />
     </Suspense>
   );

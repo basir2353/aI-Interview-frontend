@@ -1,13 +1,14 @@
 import Link from 'next/link';
 import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { BRAND_NAME } from '@/lib/brand';
+import { SHOW_PRICING } from '@/lib/featureFlags';
 
 const footerLinks = {
   Product: [
     { href: '/#product', label: 'Product' },
     { href: '/#features', label: 'Features' },
     { href: '/#how-it-works', label: 'How it works' },
-    { href: '/#pricing', label: 'Pricing' },
+    ...(SHOW_PRICING ? [{ href: '/#pricing', label: 'Pricing' }] : []),
     { href: '/#faq', label: 'FAQ' },
   ],
   Company: [

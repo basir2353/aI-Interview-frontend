@@ -11,6 +11,7 @@ import { HeroInterviewVisual } from '@/components/landing/HeroInterviewVisual';
 import { IntervionLogo } from '@/components/ui/IntervionLogo';
 import { MotionReveal } from './MotionReveal';
 import { ContactForm } from '@/components/landing/ContactForm';
+import { SHOW_PRICING } from '@/lib/featureFlags';
 
 export function LandingContent() {
   const howItWorks = [
@@ -314,7 +315,8 @@ export function LandingContent() {
         </div>
       </Section>
 
-      {/* Pricing */}
+      {/* Pricing — hidden unless NEXT_PUBLIC_SHOW_PRICING=true */}
+      {SHOW_PRICING && (
       <Section id="pricing">
         <div className="mx-auto max-w-2xl text-center">
           <h2 className="font-display text-2xl font-semibold tracking-tight text-[var(--landing-text)] sm:text-3xl">Pricing</h2>
@@ -362,6 +364,7 @@ export function LandingContent() {
           ))}
         </div>
       </Section>
+      )}
 
       {/* FAQ */}
       <Section id="faq" className="bg-white/[0.03]" title="FAQ" subtitle="Common questions from hiring teams.">
