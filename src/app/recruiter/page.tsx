@@ -20,6 +20,7 @@ import { DashboardLoading } from '@/components/dashboard/DashboardLoading';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { StatusBadge, statusToVariant } from '@/components/dashboard/StatusBadge';
 import { Bot, Calendar, CheckCircle2, ClipboardList, Users } from 'lucide-react';
+import { browserTimeZone, formatScheduleDateTime, localDateAndTimeToIso } from '@/lib/scheduleTime';
 
 const ROLES: { value: InterviewRole; label: string }[] = [
   { value: 'technical', label: 'Technical' },
@@ -188,7 +189,6 @@ export default function RecruiterDashboardPage() {
     setError('');
     setSubmitLoading(true);
     try {
-      const scheduledAt = `${scheduledDate}T${scheduledTime}`;
       const customQuestions = questionLines
         .split('\n')
         .map((line) => line.trim())
@@ -211,7 +211,8 @@ export default function RecruiterDashboardPage() {
         candidateEmail,
         candidateName: candidateName || undefined,
         role,
-        scheduledAt: new Date(scheduledAt).toISOString(),
+        scheduledAt: localDateAndTimeToIso(scheduledDate, scheduledTime),
+        timeZone: browserTimeZone(),
         resumeUrl: resumeUrl.trim() || undefined,
         difficulty,
         customQuestions: customQuestions.length ? customQuestions : undefined,
@@ -749,7 +750,7 @@ export default function RecruiterDashboardPage() {
                             normalizeInterviewLanguage(s.interviewLanguage ?? s.interview_language ?? DEFAULT_INTERVIEW_LANGUAGE)
                           )}
                         </td>
-                        <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{new Date(s.scheduled_at).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{formatScheduleDateTime(s.scheduled_at)}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${meta.pill}`}>
                             {meta.label}
@@ -941,7 +942,7 @@ export default function RecruiterDashboardPage() {
                             normalizeInterviewLanguage(s.interviewLanguage ?? s.interview_language ?? DEFAULT_INTERVIEW_LANGUAGE)
                           )}
                         </td>
-                        <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{new Date(s.scheduled_at).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-medium text-[var(--surface-light-fg)]">{formatScheduleDateTime(s.scheduled_at)}</td>
                         <td className="px-6 py-4">
                           <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${meta.pill}`}>
                             {meta.label}

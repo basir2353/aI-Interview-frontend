@@ -19,17 +19,25 @@ import {
   formatFocusAreasWithCodingMode,
   type CodingInterviewModeId,
 } from '@/lib/codingInterviewModes';
+import { browserTimeZone, localDateAndTimeToIso } from '@/lib/scheduleTime';
+
+function localYmd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function getTomorrowDate(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  return localYmd(d);
 }
 function getNextWeekday10(): { date: string; time: string } {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  return { date: d.toISOString().slice(0, 10), time: '10:00' };
+  return { date: localYmd(d), time: '10:00' };
 }
 
 const roleOptions: Array<{ value: InterviewRole; label: string }> = [
@@ -154,7 +162,7 @@ export default function RecruiterSchedulePage() {
     setError('');
     setSubmitting(true);
     try {
-      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      const scheduledAt = localDateAndTimeToIso(scheduleDate, scheduleTime);
       const metadataSections: string[] = [];
       if (durationMinutes.trim()) metadataSections.push(`Duration: ${durationMinutes.trim()} minutes`);
       if (focusAreas.trim()) metadataSections.push(`Focus areas: ${focusAreas.trim()}`);
@@ -171,6 +179,7 @@ export default function RecruiterSchedulePage() {
 
       const created = await api.recruiterScheduleFromApplication(application.id, {
         scheduledAt,
+        timeZone: browserTimeZone(),
         role,
         difficulty,
         customQuestions: customQuestionPayload,

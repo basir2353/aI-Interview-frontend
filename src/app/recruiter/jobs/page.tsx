@@ -13,6 +13,7 @@ import {
   type RecruiterJob,
 } from '@/lib/api';
 import type { InterviewRole } from '@/types';
+import { browserTimeZone, localDateAndTimeToIso } from '@/lib/scheduleTime';
 
 const roles: { value: InterviewRole; label: string }[] = [
   { value: 'technical', label: 'Technical' },
@@ -108,9 +109,10 @@ export default function RecruiterJobsPage() {
     setError('');
     setSchedulingId(application.id);
     try {
-      const scheduledAt = new Date(`${date}T${time}`).toISOString();
+      const scheduledAt = localDateAndTimeToIso(date, time);
       const created = await api.recruiterScheduleFromApplication(application.id, {
         scheduledAt,
+        timeZone: browserTimeZone(),
         role: application.position_role,
       });
       setJoinUrlByApp((prev) => ({ ...prev, [application.id]: created.joinUrl }));

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { api, type AdminScheduleRow } from '@/lib/api';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { Card } from '@/components/ui/Card';
+import { browserTimeZone, formatScheduleDateTime, localDateAndTimeToIso } from '@/lib/scheduleTime';
 
 export default function AdminSchedulesPage() {
   const router = useRouter();
@@ -67,7 +68,11 @@ export default function AdminSchedulesPage() {
     setError('');
     try {
       await api.adminUpdateSchedule(editSchedule.id, {
-        scheduledAt: new Date(editScheduledAt).toISOString(),
+        scheduledAt: localDateAndTimeToIso(
+          editScheduledAt.slice(0, 10),
+          editScheduledAt.slice(11, 16) || '00:00'
+        ),
+        timeZone: browserTimeZone(),
         candidateEmail: editCandidateEmail.trim(),
         candidateName: editCandidateName.trim() || undefined,
       });
@@ -148,7 +153,7 @@ export default function AdminSchedulesPage() {
                       <p className="text-xs text-[var(--surface-light-muted)]">{s.candidate_email}</p>
                     </td>
                     <td className="px-4 py-3 text-[var(--surface-light-fg)] sm:px-6 sm:py-4">{s.role}</td>
-                    <td className="px-4 py-3 text-[var(--surface-light-fg)] sm:px-6 sm:py-4">{new Date(s.scheduled_at).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-[var(--surface-light-fg)] sm:px-6 sm:py-4">{formatScheduleDateTime(s.scheduled_at)}</td>
                     <td className="px-4 py-3 sm:px-6 sm:py-4">
                       <span className="capitalize text-[var(--surface-light-muted)]">{String(s.status).replace(/_/g, ' ')}</span>
                     </td>

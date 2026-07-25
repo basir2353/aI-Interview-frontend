@@ -170,6 +170,7 @@ export const api = {
     role: InterviewRole;
     scheduledAt: string;
     positionId?: string;
+    timeZone?: string;
   }) {
     return request<AdminSchedule>('/admin/schedule', {
       method: 'POST',
@@ -194,6 +195,7 @@ export const api = {
     status?: string;
     candidateEmail?: string;
     candidateName?: string;
+    timeZone?: string;
   }) {
     return request<{ updated: boolean }>(`/admin/schedule/${id}`, {
       method: 'PATCH',
@@ -435,6 +437,7 @@ export const api = {
     resumeUrl?: string;
     interviewerPersona?: InterviewerPersona;
     interviewLanguage?: InterviewLanguageCode;
+    timeZone?: string;
   }) {
     return request<AdminSchedule>('/recruiter/schedule', {
       method: 'POST',
@@ -646,6 +649,7 @@ export const api = {
       durationMinutes?: number;
       interviewerPersona?: InterviewerPersona;
       interviewLanguage?: InterviewLanguageCode;
+      timeZone?: string;
     }
   ) {
     return request<AdminSchedule>(`/recruiter/applications/${applicationId}/schedule`, {
