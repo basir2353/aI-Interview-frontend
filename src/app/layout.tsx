@@ -32,8 +32,9 @@ const themeScript = `(function(){
   var p=(location.pathname||'').replace(/\\/$/,'')||'/';
   var isRecruiter=p.indexOf('/recruiter')===0&&p!=='/recruiter/login'&&p!=='/recruiter/forgot-password';
   var isAdmin=p.indexOf('/admin')===0&&p!=='/admin/login';
-  if(isRecruiter||isAdmin){
-    document.documentElement.setAttribute('data-dashboard-app',isAdmin?'admin':'recruiter');
+  var isCandidate=p.indexOf('/candidate')===0;
+  if(isRecruiter||isAdmin||isCandidate){
+    document.documentElement.setAttribute('data-dashboard-app',isAdmin?'admin':isRecruiter?'recruiter':'candidate');
   }
 })();`;
 

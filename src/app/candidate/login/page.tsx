@@ -48,7 +48,7 @@ export default function CandidateLoginPage() {
       subtitle="Access your applications, interview links, and reports."
     >
       {resetSuccess && (
-        <p className="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <p className="mb-4 rounded-xl border border-[var(--success-border)] bg-[var(--success-bg)] px-4 py-3 text-sm text-[var(--success-text)]">
           Password updated. You can sign in with your new password.
         </p>
       )}
@@ -84,20 +84,20 @@ export default function CandidateLoginPage() {
           />
         </div>
         <p className="text-right">
-          <Link href="/candidate/forgot-password" className="text-sm font-medium text-[#5b5bd6] hover:underline">
+          <Link href="/candidate/forgot-password" className="text-sm font-medium text-[var(--accent)] hover:underline">
             Forgot password?
           </Link>
         </p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
         <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-      <p className="mt-5 text-sm text-[#64748b]">
+      <p className="mt-5 text-sm text-[var(--surface-light-muted)]">
         New here?{' '}
         <Link
           href={`/candidate/signup?next=${encodeURIComponent(next)}`}
-          className="font-medium text-[#5b5bd6] hover:underline"
+          className="font-medium text-[var(--accent)] hover:underline"
         >
           Create an account
         </Link>

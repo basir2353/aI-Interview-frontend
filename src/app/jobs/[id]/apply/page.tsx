@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { IntervionLogo } from '@/components/ui/IntervionLogo';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { api, type PublicJob } from '@/lib/api';
 
 const fieldClass =
-  'w-full rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20';
-const labelClass = 'mb-1.5 block text-sm font-medium text-[#334155]';
+  'w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]';
+const labelClass = 'mb-1.5 block text-sm font-medium text-[var(--surface-light-fg)]';
 
 export default function ApplyJobPage() {
   const params = useParams<{ id: string }>();
@@ -31,6 +32,11 @@ export default function ApplyJobPage() {
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [coverLetter, setCoverLetter] = useState('');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-dashboard-app', 'candidate');
+    return () => document.documentElement.removeAttribute('data-dashboard-app');
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -111,38 +117,41 @@ export default function ApplyJobPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6f8] text-[#0f172a]">
-      <header className="border-b border-[#e2e8f0] bg-white">
+    <div className="min-h-screen bg-[var(--surface-light)] text-[var(--surface-light-fg)]">
+      <header className="border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)]">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link href="/jobs" className="flex items-center gap-2 text-sm font-medium text-[#64748b] hover:text-[#0f172a]">
+          <Link href="/jobs" className="flex items-center gap-2 text-sm font-medium text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]">
             ← Jobs
           </Link>
-          <IntervionLogo className="h-7" />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <IntervionLogo className="h-7" />
+          </div>
         </div>
       </header>
 
       <main className="mx-auto grid max-w-5xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-5">
-        <aside className="rounded-2xl border border-[#e2e8f0] bg-white p-6 lg:col-span-2">
-          {loading && <p className="text-sm text-[#64748b]">Loading job…</p>}
+        <aside className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 lg:col-span-2">
+          {loading && <p className="text-sm text-[var(--surface-light-muted)]">Loading job…</p>}
           {!loading && job && (
             <div className="space-y-3">
               <h1 className="font-display text-xl font-semibold tracking-tight">{job.title}</h1>
-              {job.company_name && <p className="text-sm font-medium text-[#475569]">{job.company_name}</p>}
-              <p className="text-sm text-[#64748b]">
+              {job.company_name && <p className="text-sm font-medium text-[var(--surface-light-muted)]">{job.company_name}</p>}
+              <p className="text-sm text-[var(--surface-light-muted)]">
                 {job.role}
                 {job.location ? ` · ${job.location}` : ''}
               </p>
-              {job.salary_range && <p className="text-sm text-[#475569]">{job.salary_range}</p>}
+              {job.salary_range && <p className="text-sm text-[var(--surface-light-muted)]">{job.salary_range}</p>}
               {job.description && (
-                <p className="border-t border-[#f1f5f9] pt-4 text-sm leading-relaxed text-[#64748b]">{job.description}</p>
+                <p className="border-t border-[var(--surface-light-border)] pt-4 text-sm leading-relaxed text-[var(--surface-light-muted)]">{job.description}</p>
               )}
             </div>
           )}
         </aside>
 
-        <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6 lg:col-span-3">
+        <section className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6 lg:col-span-3">
           <h2 className="font-display text-lg font-semibold">Your application</h2>
-          <p className="mt-1 text-sm text-[#64748b]">Upload a resume and confirm your details.</p>
+          <p className="mt-1 text-sm text-[var(--surface-light-muted)]">Upload a resume and confirm your details.</p>
 
           <form className="mt-6 grid gap-4" onSubmit={submitApplication}>
             <div>
@@ -182,7 +191,7 @@ export default function ApplyJobPage() {
               <input id="ap-pf" type="url" value={portfolioUrl} onChange={(e) => setPortfolioUrl(e.target.value)} className={fieldClass} />
             </div>
 
-            <div className="rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-4">
+            <div className="rounded-xl border border-dashed border-[var(--surface-light-border)] bg-[var(--surface-light)] p-4">
               <label className={labelClass}>Resume (PDF / DOC / DOCX)</label>
               <input
                 type="file"
@@ -190,9 +199,9 @@ export default function ApplyJobPage() {
                 onChange={(e) => {
                   void handleResumeUpload(e.target.files?.[0] ?? null);
                 }}
-                className="block w-full text-sm text-[#475569] file:mr-3 file:rounded-lg file:border-0 file:bg-[#0f172a] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
+                className="block w-full text-sm text-[var(--surface-light-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--surface-light-fg)] file:px-4 file:py-2 file:text-sm file:font-semibold file:text-[var(--surface-light-card)]"
               />
-              {uploadingResume && <p className="mt-2 text-xs text-[#64748b]">Uploading…</p>}
+              {uploadingResume && <p className="mt-2 text-xs text-[var(--surface-light-muted)]">Uploading…</p>}
               {uploadedResumeUrl && <p className="mt-2 text-xs text-emerald-700">Resume uploaded.</p>}
             </div>
 
@@ -211,13 +220,13 @@ export default function ApplyJobPage() {
             </div>
 
             {error && (
-              <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+              <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={submitLoading || uploadingResume}
-              className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+              className="rounded-xl bg-[var(--surface-light-fg)] px-5 py-3 text-sm font-semibold text-[var(--surface-light-card)] transition hover:opacity-90 disabled:opacity-60"
             >
               {submitLoading ? 'Submitting…' : 'Submit application'}
             </button>

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { IntervionLogo } from '@/components/ui/IntervionLogo';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { BRAND_NAME } from '@/lib/brand';
 
 const NAV = [
@@ -39,12 +40,12 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f6f8] text-[#0f172a]">
-      <header className="sticky top-0 z-40 border-b border-[#e2e8f0] bg-white/90 backdrop-blur-md">
+    <div className="min-h-screen bg-[var(--surface-light)] text-[var(--surface-light-fg)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)]/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link href="/candidate/dashboard" className="flex shrink-0 items-center gap-2.5">
             <IntervionLogo className="h-8" />
-            <span className="hidden font-display text-sm font-semibold tracking-tight text-[#0f172a] sm:inline">
+            <span className="hidden font-display text-sm font-semibold tracking-tight text-[var(--surface-light-fg)] sm:inline">
               {BRAND_NAME}
             </span>
           </Link>
@@ -57,14 +58,16 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
                   key={item.href}
                   href={item.href}
                   className={`relative rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    active ? 'text-[#0f172a]' : 'text-[#64748b] hover:text-[#0f172a]'
+                    active
+                      ? 'text-[var(--surface-light-fg)]'
+                      : 'text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]'
                   }`}
                 >
                   {item.label}
                   {active && (
                     <motion.span
                       layoutId="candidate-nav-underline"
-                      className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-[#5b5bd6]"
+                      className="absolute inset-x-2 -bottom-0.5 h-0.5 rounded-full bg-[var(--accent)]"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
@@ -74,22 +77,23 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
           </nav>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link
               href="/jobs"
-              className="hidden rounded-lg border border-[#e2e8f0] bg-white px-3 py-1.5 text-sm font-semibold text-[#0f172a] transition hover:border-[#cbd5e1] sm:inline-flex"
+              className="hidden rounded-lg border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-3 py-1.5 text-sm font-semibold text-[var(--surface-light-fg)] transition hover:bg-[var(--accent-muted)] sm:inline-flex"
             >
               Browse jobs
             </Link>
             <button
               type="button"
               onClick={logout}
-              className="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748b] transition hover:text-[#0f172a] sm:inline-flex"
+              className="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--surface-light-muted)] transition hover:text-[var(--surface-light-fg)] sm:inline-flex"
             >
-              {name ? `Sign out` : 'Sign out'}
+              Sign out{name ? '' : ''}
             </button>
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e2e8f0] md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--surface-light-border)] md:hidden"
               aria-label="Menu"
               onClick={() => setMenuOpen((o) => !o)}
             >
@@ -108,7 +112,7 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="border-t border-[#e2e8f0] bg-white px-4 py-3 md:hidden"
+            className="border-t border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 md:hidden"
           >
             <div className="flex flex-col gap-1">
               {NAV.map((item) => (
@@ -117,7 +121,9 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
                   href={item.href}
                   onClick={() => setMenuOpen(false)}
                   className={`rounded-lg px-3 py-2.5 text-sm font-medium ${
-                    pathname === item.href ? 'bg-[#f1f5f9] text-[#0f172a]' : 'text-[#64748b]'
+                    pathname === item.href
+                      ? 'bg-[var(--accent-muted)] text-[var(--surface-light-fg)]'
+                      : 'text-[var(--surface-light-muted)]'
                   }`}
                 >
                   {item.label}
@@ -126,14 +132,14 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
               <Link
                 href="/jobs"
                 onClick={() => setMenuOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-semibold text-[#0f172a]"
+                className="rounded-lg px-3 py-2.5 text-sm font-semibold text-[var(--surface-light-fg)]"
               >
                 Browse jobs
               </Link>
               <button
                 type="button"
                 onClick={logout}
-                className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[#64748b]"
+                className="rounded-lg px-3 py-2.5 text-left text-sm font-medium text-[var(--surface-light-muted)]"
               >
                 Sign out
               </button>
@@ -149,10 +155,12 @@ export function CandidateShell({ children, title, subtitle }: CandidateShellProp
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
           <div className="mb-8">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-[#0f172a] sm:text-3xl">
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--surface-light-fg-heading)] sm:text-3xl">
               {title}
             </h1>
-            {subtitle && <p className="mt-2 max-w-2xl text-sm text-[#64748b] sm:text-base">{subtitle}</p>}
+            {subtitle && (
+              <p className="mt-2 max-w-2xl text-sm text-[var(--surface-light-muted)] sm:text-base">{subtitle}</p>
+            )}
           </div>
           {children}
         </motion.div>

@@ -103,7 +103,7 @@ function ForgotPasswordContent() {
               className={candidateAuthInputClass}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
           <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
             {loading ? 'Sending…' : 'Send reset code'}
           </button>
@@ -112,7 +112,7 @@ function ForgotPasswordContent() {
 
       {step === 'code' && (
         <form className="space-y-4" onSubmit={submitCode}>
-          {success && <p className="text-sm text-emerald-700">{success}</p>}
+          {success && <p className="text-sm text-[var(--success-text)]">{success}</p>}
           <div>
             <label htmlFor="fp-code" className={candidateAuthLabelClass}>
               6-digit code
@@ -128,11 +128,11 @@ function ForgotPasswordContent() {
               className={`${candidateAuthInputClass} text-center text-lg tracking-[0.3em]`}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
           <button type="submit" disabled={code.length !== 6} className={candidateAuthPrimaryBtnClass}>
             Continue
           </button>
-          <p className="text-center text-sm text-[#64748b]">
+          <p className="text-center text-sm text-[var(--surface-light-muted)]">
             Didn’t get the email?{' '}
             <button
               type="button"
@@ -141,7 +141,7 @@ function ForgotPasswordContent() {
                 setCode('');
                 setSuccess('');
               }}
-              className="font-medium text-[#5b5bd6] hover:underline"
+              className="font-medium text-[var(--accent)] hover:underline"
             >
               Try again
             </button>
@@ -178,16 +178,16 @@ function ForgotPasswordContent() {
               className={candidateAuthInputClass}
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          {success && <p className="text-sm text-emerald-700">{success}</p>}
+          {error && <p className="text-sm text-[var(--error-text)]">{error}</p>}
+          {success && <p className="text-sm text-[var(--success-text)]">{success}</p>}
           <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
             {loading ? 'Updating…' : 'Update password'}
           </button>
         </form>
       )}
 
-      <p className="mt-5 text-sm text-[#64748b]">
-        <Link href="/candidate/login" className="font-medium text-[#5b5bd6] hover:underline">
+      <p className="mt-5 text-sm text-[var(--surface-light-muted)]">
+        <Link href="/candidate/login" className="font-medium text-[var(--accent)] hover:underline">
           Back to sign in
         </Link>
       </p>
@@ -197,7 +197,7 @@ function ForgotPasswordContent() {
 
 export default function ForgotPasswordPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#f4f6f8]">Loading…</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[var(--surface-light)]">Loading…</div>}>
       <ForgotPasswordContent />
     </Suspense>
   );

@@ -40,26 +40,26 @@ export default function CandidateDashboardPage() {
       title={data ? `Welcome, ${data.profile.name || 'there'}` : 'Overview'}
       subtitle="Your interviews and applications in one place."
     >
-      {loading && <p className="text-sm font-medium text-[#64748b]">Loading…</p>}
+      {loading && <p className="text-sm font-medium text-[var(--surface-light-muted)]">Loading…</p>}
       {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        <p className="rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
       )}
 
       {data && (
         <div className="space-y-10">
           <section>
             <div className="mb-4 flex items-end justify-between gap-3">
-              <h2 className="font-display text-lg font-semibold text-[#0f172a]">Upcoming interviews</h2>
-              <Link href="/candidate/applications" className="text-sm font-medium text-[#5b5bd6] hover:underline">
+              <h2 className="font-display text-lg font-semibold text-[var(--surface-light-fg)]">Upcoming interviews</h2>
+              <Link href="/candidate/applications" className="text-sm font-medium text-[var(--accent)] hover:underline">
                 All applications
               </Link>
             </div>
             {upcoming.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#e2e8f0] bg-white px-6 py-10 text-center">
-                <p className="text-sm text-[#64748b]">No interviews scheduled yet.</p>
+              <div className="rounded-2xl border border-dashed border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-6 py-10 text-center">
+                <p className="text-sm text-[var(--surface-light-muted)]">No interviews scheduled yet.</p>
                 <Link
                   href="/jobs"
-                  className="mt-4 inline-flex rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e293b]"
+                  className="mt-4 inline-flex rounded-xl bg-[var(--surface-light-fg)] px-4 py-2.5 text-sm font-semibold text-[var(--surface-light-card)] transition hover:opacity-90"
                 >
                   Browse open jobs
                 </Link>
@@ -78,27 +78,27 @@ export default function CandidateDashboardPage() {
           </section>
 
           <section>
-            <h2 className="mb-4 font-display text-lg font-semibold text-[#0f172a]">Recent applications</h2>
+            <h2 className="mb-4 font-display text-lg font-semibold text-[var(--surface-light-fg)]">Recent applications</h2>
             {recent.length === 0 ? (
-              <p className="text-sm text-[#64748b]">You haven&apos;t applied to any roles yet.</p>
+              <p className="text-sm text-[var(--surface-light-muted)]">You haven&apos;t applied to any roles yet.</p>
             ) : (
-              <ul className="divide-y divide-[#e2e8f0] overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white">
+              <ul className="divide-y divide-[var(--surface-light-border)] overflow-hidden rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)]">
                 {recent.map((app) => (
                   <li key={app.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                     <div>
-                      <p className="font-medium text-[#0f172a]">
+                      <p className="font-medium text-[var(--surface-light-fg)]">
                         {app.position.title}
                         {app.position.companyName ? (
-                          <span className="font-normal text-[#64748b]"> · {app.position.companyName}</span>
+                          <span className="font-normal text-[var(--surface-light-muted)]"> · {app.position.companyName}</span>
                         ) : null}
                       </p>
-                      <p className="mt-0.5 text-xs capitalize text-[#64748b]">
+                      <p className="mt-0.5 text-xs capitalize text-[var(--surface-light-muted)]">
                         {app.status.replace(/_/g, ' ')}
                       </p>
                     </div>
                     <Link
                       href="/candidate/applications"
-                      className="text-sm font-medium text-[#5b5bd6] hover:underline"
+                      className="text-sm font-medium text-[var(--accent)] hover:underline"
                     >
                       View
                     </Link>

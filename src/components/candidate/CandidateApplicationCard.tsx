@@ -29,18 +29,26 @@ export function CandidateInterviewCard({
 
   return (
     <div
-      className={`rounded-2xl border border-[#e2e8f0] bg-white ${compact ? 'p-4' : 'p-5 sm:p-6'}`}
+      className={`rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] ${
+        compact ? 'p-4' : 'p-5 sm:p-6'
+      }`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#64748b]">
+          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--surface-light-muted)]">
             <Calendar className="h-3.5 w-3.5" />
             Interview scheduled
           </p>
-          {jobTitle && <p className="mt-2 text-base font-semibold text-[#0f172a]">{jobTitle}</p>}
-          {formatted && <p className="mt-1 text-lg font-semibold tracking-tight text-[#0f172a]">{formatted}</p>}
+          {jobTitle && (
+            <p className="mt-2 text-base font-semibold text-[var(--surface-light-fg)]">{jobTitle}</p>
+          )}
+          {formatted && (
+            <p className="mt-1 text-lg font-semibold tracking-tight text-[var(--surface-light-fg-heading)]">
+              {formatted}
+            </p>
+          )}
           {schedule.status && (
-            <p className="mt-1 text-sm capitalize text-[#64748b]">
+            <p className="mt-1 text-sm capitalize text-[var(--surface-light-muted)]">
               {schedule.status.replace(/_/g, ' ')}
             </p>
           )}
@@ -50,7 +58,7 @@ export function CandidateInterviewCard({
         {schedule.joinUrl && (
           <Link
             href={schedule.joinUrl}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e293b]"
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--surface-light-fg)] px-4 py-2.5 text-sm font-semibold text-[var(--surface-light-card)] transition hover:opacity-90"
           >
             Join interview
             <ExternalLink className="h-4 w-4" />
@@ -59,13 +67,13 @@ export function CandidateInterviewCard({
         {schedule.reportUrl && (
           <Link
             href={schedule.reportUrl}
-            className="inline-flex rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-semibold text-[#0f172a] transition hover:bg-[#f8fafc]"
+            className="inline-flex rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-2.5 text-sm font-semibold text-[var(--surface-light-fg)] transition hover:bg-[var(--accent-muted)]"
           >
             View report
           </Link>
         )}
       </div>
-      <p className="mt-3 text-xs text-[#94a3b8]">
+      <p className="mt-3 text-xs text-[var(--surface-light-muted-soft)]">
         We also emailed you this time and join link. You can always find it under Applications.
       </p>
     </div>
@@ -78,19 +86,19 @@ function statusLabel(status: string) {
 
 export function CandidateApplicationCard({ app }: { app: CandidateDashboardApplication }) {
   return (
-    <article className="rounded-2xl border border-[#e2e8f0] bg-white p-5 sm:p-6">
+    <article className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-base font-semibold text-[#0f172a] sm:text-lg">
+          <p className="text-base font-semibold text-[var(--surface-light-fg)] sm:text-lg">
             {app.position.title}
             {app.position.companyName ? (
-              <span className="font-normal text-[#64748b]"> · {app.position.companyName}</span>
+              <span className="font-normal text-[var(--surface-light-muted)]"> · {app.position.companyName}</span>
             ) : null}
           </p>
-          <p className="mt-1 text-sm text-[#64748b]">{app.position.role}</p>
-          <p className="mt-2 text-xs text-[#94a3b8]">
+          <p className="mt-1 text-sm text-[var(--surface-light-muted)]">{app.position.role}</p>
+          <p className="mt-2 text-xs text-[var(--surface-light-muted-soft)]">
             Applied {new Date(app.appliedAt).toLocaleString()} ·{' '}
-            <span className="capitalize text-[#475569]">{statusLabel(app.status)}</span>
+            <span className="capitalize text-[var(--surface-light-muted)]">{statusLabel(app.status)}</span>
           </p>
         </div>
         {app.resumeUrl && (
@@ -98,7 +106,7 @@ export function CandidateApplicationCard({ app }: { app: CandidateDashboardAppli
             href={app.resumeUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-[#e2e8f0] px-3 py-1.5 text-xs font-semibold text-[#475569] hover:bg-[#f8fafc]"
+            className="rounded-lg border border-[var(--surface-light-border)] px-3 py-1.5 text-xs font-semibold text-[var(--surface-light-muted)] hover:bg-[var(--accent-muted)]"
           >
             View resume
           </a>
@@ -106,11 +114,11 @@ export function CandidateApplicationCard({ app }: { app: CandidateDashboardAppli
       </div>
 
       {app.schedule ? (
-        <div className="mt-5 border-t border-[#f1f5f9] pt-5">
+        <div className="mt-5 border-t border-[var(--surface-light-border)] pt-5">
           <CandidateInterviewCard schedule={app.schedule} jobTitle={app.position.title} compact />
         </div>
       ) : (
-        <div className="mt-4 rounded-xl border border-dashed border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm text-[#64748b]">
+        <div className="mt-4 rounded-xl border border-dashed border-[var(--surface-light-border)] bg-[var(--surface-light)] px-4 py-3 text-sm text-[var(--surface-light-muted)]">
           Application received. You&apos;ll get an email when an interview is scheduled.
         </div>
       )}

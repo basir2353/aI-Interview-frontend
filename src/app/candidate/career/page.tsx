@@ -92,8 +92,8 @@ export default function CandidateCareerPage() {
   const segmentClass = (active: boolean) =>
     `rounded-lg px-3.5 py-2 text-sm font-medium transition ${
       active
-        ? 'bg-[#0f172a] text-white'
-        : 'bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]'
+        ? 'bg-[var(--surface-light-fg)] text-[var(--surface-light-card)]'
+        : 'bg-[var(--accent-muted)] text-[var(--surface-light-muted)] hover:bg-[var(--accent-muted)]'
     }`;
 
   return (
@@ -101,16 +101,16 @@ export default function CandidateCareerPage() {
       title="Career"
       subtitle="Tell us what you’re looking for so we can match you better."
     >
-      {loading && <p className="text-sm text-[#64748b]">Loading…</p>}
+      {loading && <p className="text-sm text-[var(--surface-light-muted)]">Loading…</p>}
       {error && (
-        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        <p className="mb-4 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] px-4 py-3 text-sm text-[var(--error-text)]">{error}</p>
       )}
 
       {!loading && (
         <div className="space-y-6">
-          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
-            <h3 className="font-display text-base font-semibold text-[#0f172a]">Preferred roles</h3>
-            <p className="mt-1 text-sm text-[#64748b]">Select roles to match. Leave empty to match all.</p>
+          <section className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
+            <h3 className="font-display text-base font-semibold text-[var(--surface-light-fg)]">Preferred roles</h3>
+            <p className="mt-1 text-sm text-[var(--surface-light-muted)]">Select roles to match. Leave empty to match all.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {ROLE_OPTIONS.map((role) => (
                 <button
@@ -125,9 +125,9 @@ export default function CandidateCareerPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
-            <h3 className="font-display text-base font-semibold text-[#0f172a]">Preferred locations</h3>
-            <p className="mt-1 text-sm text-[#64748b]">Add locations (e.g. Remote). Leave empty to match all.</p>
+          <section className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
+            <h3 className="font-display text-base font-semibold text-[var(--surface-light-fg)]">Preferred locations</h3>
+            <p className="mt-1 text-sm text-[var(--surface-light-muted)]">Add locations (e.g. Remote). Leave empty to match all.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <input
                 type="text"
@@ -135,12 +135,12 @@ export default function CandidateCareerPage() {
                 onChange={(e) => setLocationInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addLocation())}
                 placeholder="Add location"
-                className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20"
+                className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-2 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
               />
               <button
                 type="button"
                 onClick={addLocation}
-                className="rounded-xl border border-[#e2e8f0] px-4 py-2 text-sm font-semibold text-[#0f172a] hover:bg-[#f8fafc]"
+                className="rounded-xl border border-[var(--surface-light-border)] px-4 py-2 text-sm font-semibold text-[var(--surface-light-fg)] hover:bg-[var(--surface-light)]"
               >
                 Add
               </button>
@@ -149,10 +149,10 @@ export default function CandidateCareerPage() {
               {preferredLocations.map((loc) => (
                 <span
                   key={loc}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#f1f5f9] px-3 py-1.5 text-sm text-[#334155]"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent-muted)] px-3 py-1.5 text-sm text-[var(--surface-light-fg)]"
                 >
                   {loc}
-                  <button type="button" onClick={() => removeLocation(loc)} className="text-[#94a3b8] hover:text-[#0f172a]" aria-label="Remove">
+                  <button type="button" onClick={() => removeLocation(loc)} className="text-[var(--surface-light-muted-soft)] hover:text-[var(--surface-light-fg)]" aria-label="Remove">
                     ×
                   </button>
                 </span>
@@ -162,7 +162,7 @@ export default function CandidateCareerPage() {
                   key={loc}
                   type="button"
                   onClick={() => setPreferredLocations((p) => [...p, loc])}
-                  className="rounded-lg border border-dashed border-[#cbd5e1] px-3 py-1.5 text-sm text-[#64748b] hover:border-[#94a3b8]"
+                  className="rounded-lg border border-dashed border-[var(--surface-light-border)] px-3 py-1.5 text-sm text-[var(--surface-light-muted)] hover:border-[var(--surface-light-muted)]"
                 >
                   + {loc}
                 </button>
@@ -170,26 +170,26 @@ export default function CandidateCareerPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
-            <h3 className="font-display text-base font-semibold text-[#0f172a]">Career goals</h3>
+          <section className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
+            <h3 className="font-display text-base font-semibold text-[var(--surface-light-fg)]">Career goals</h3>
             <textarea
               value={careerGoals}
               onChange={(e) => setCareerGoals(e.target.value)}
               placeholder="Optional — a short note on what you’re aiming for"
               rows={3}
-              className="mt-3 w-full rounded-xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20"
+              className="mt-3 w-full rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-3 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]"
             />
           </section>
 
-          <section className="rounded-2xl border border-[#e2e8f0] bg-white p-6">
+          <section className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-6">
             <label className="flex cursor-pointer items-center gap-3">
               <input
                 type="checkbox"
                 checked={autoApplyEnabled}
                 onChange={(e) => setAutoApplyEnabled(e.target.checked)}
-                className="h-4 w-4 rounded border-[#cbd5e1]"
+                className="h-4 w-4 rounded border-[var(--surface-light-border)]"
               />
-              <span className="text-sm font-medium text-[#0f172a]">
+              <span className="text-sm font-medium text-[var(--surface-light-fg)]">
                 Remember auto-apply preference (use the button below to run it)
               </span>
             </label>
@@ -200,7 +200,7 @@ export default function CandidateCareerPage() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="rounded-xl bg-[#0f172a] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1e293b] disabled:opacity-60"
+              className="rounded-xl bg-[var(--surface-light-fg)] px-5 py-2.5 text-sm font-semibold text-[var(--surface-light-card)] transition hover:opacity-90 disabled:opacity-60"
             >
               {saving ? 'Saving…' : 'Save preferences'}
             </button>
@@ -208,7 +208,7 @@ export default function CandidateCareerPage() {
               type="button"
               onClick={handleAutoApply}
               disabled={applying}
-              className="rounded-xl border border-[#e2e8f0] bg-white px-5 py-2.5 text-sm font-semibold text-[#0f172a] transition hover:bg-[#f8fafc] disabled:opacity-60"
+              className="rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-5 py-2.5 text-sm font-semibold text-[var(--surface-light-fg)] transition hover:bg-[var(--surface-light)] disabled:opacity-60"
             >
               {applying ? 'Applying…' : 'Apply to matching jobs now'}
             </button>

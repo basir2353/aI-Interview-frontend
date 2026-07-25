@@ -162,6 +162,13 @@ html[data-dashboard-app][data-theme="dark"] {
   --dash-badge-neutral-bg: rgba(51, 65, 85, 0.5);
   --dash-badge-neutral-fg: #cbd5e1;
   --dash-badge-neutral-border: #475569;
+
+  --success-bg: rgba(16, 185, 129, 0.15);
+  --success-text: #34d399;
+  --success-border: rgba(16, 185, 129, 0.35);
+  --error-bg: rgba(239, 68, 68, 0.15);
+  --error-text: #fca5a5;
+  --error-border: rgba(239, 68, 68, 0.35);
 }
 
 html[data-dashboard-app][data-theme="dark"] body {

@@ -152,18 +152,18 @@ export default function CandidateSignupPage() {
             className={candidateAuthInputClass}
           />
         </div>
-        {error && <p className="text-sm text-red-600 md:col-span-2">{error}</p>}
+        {error && <p className="text-sm text-[var(--error-text)] md:col-span-2">{error}</p>}
         <div className="md:col-span-2">
           <button type="submit" disabled={loading} className={candidateAuthPrimaryBtnClass}>
             {loading ? 'Creating account…' : 'Create account'}
           </button>
         </div>
       </form>
-      <p className="mt-5 text-sm text-[#64748b]">
+      <p className="mt-5 text-sm text-[var(--surface-light-muted)]">
         Already have an account?{' '}
         <Link
           href={`/candidate/login?next=${encodeURIComponent(next)}`}
-          className="font-medium text-[#5b5bd6] hover:underline"
+          className="font-medium text-[var(--accent)] hover:underline"
         >
           Sign in
         </Link>

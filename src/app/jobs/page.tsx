@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { IntervionLogo } from '@/components/ui/IntervionLogo';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { BRAND_NAME } from '@/lib/brand';
 import { api, type PublicJob } from '@/lib/api';
 import type { InterviewRole } from '@/types';
@@ -64,6 +65,11 @@ export default function JobsPage() {
   const [postedDate, setPostedDate] = useState('');
   const [timeSlot, setTimeSlot] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'salary_high' | 'salary_low'>('newest');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-dashboard-app', 'candidate');
+    return () => document.documentElement.removeAttribute('data-dashboard-app');
+  }, []);
 
   useEffect(() => {
     api
@@ -149,28 +155,29 @@ export default function JobsPage() {
   };
 
   const inputClass =
-    'rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm text-[#0f172a] outline-none focus:border-[#5b5bd6] focus:ring-2 focus:ring-[#5b5bd6]/20';
+    'rounded-xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-4 py-2.5 text-sm text-[var(--surface-light-fg)] outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)]';
 
   return (
-    <div className="min-h-screen bg-[#f4f6f8] text-[#0f172a]">
-      <header className="border-b border-[#e2e8f0] bg-white">
+    <div className="min-h-screen bg-[var(--surface-light)] text-[var(--surface-light-fg)]">
+      <header className="border-b border-[var(--surface-light-border)] bg-[var(--surface-light-card)]">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <IntervionLogo className="h-8" />
             <span className="font-display text-sm font-semibold tracking-tight">{BRAND_NAME}</span>
           </Link>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {candidateLoggedIn ? (
               <Link
                 href="/candidate/dashboard"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748b] hover:text-[#0f172a]"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]"
               >
                 My workspace
               </Link>
             ) : (
               <Link
                 href="/candidate/login?next=/jobs"
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#64748b] hover:text-[#0f172a]"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[var(--surface-light-muted)] hover:text-[var(--surface-light-fg)]"
               >
                 Sign in
               </Link>
@@ -182,18 +189,18 @@ export default function JobsPage() {
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
         <div className="mb-8">
           <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Open roles</h1>
-          <p className="mt-2 text-sm text-[#64748b] sm:text-base">Find a role and apply in a few minutes.</p>
+          <p className="mt-2 text-sm text-[var(--surface-light-muted)] sm:text-base">Find a role and apply in a few minutes.</p>
         </div>
 
-        <section className="mb-8 rounded-2xl border border-[#e2e8f0] bg-white p-5 sm:p-6">
+        <section className="mb-8 rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-5 sm:p-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-medium text-[#475569]">
+            <p className="text-sm font-medium text-[var(--surface-light-muted)]">
               {filteredJobs.length} result{filteredJobs.length !== 1 ? 's' : ''}
             </p>
             <button
               type="button"
               onClick={resetFilters}
-              className="text-sm font-medium text-[#5b5bd6] hover:underline"
+              className="text-sm font-medium text-[var(--accent)] hover:underline"
             >
               Reset filters
             </button>
@@ -236,12 +243,12 @@ export default function JobsPage() {
           </div>
         </section>
 
-        {loading && <p className="text-sm text-[#64748b]">Loading jobs…</p>}
+        {loading && <p className="text-sm text-[var(--surface-light-muted)]">Loading jobs…</p>}
         {error && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
         {!loading && filteredJobs.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-[#e2e8f0] bg-white px-6 py-12 text-center text-sm text-[#64748b]">
+          <div className="rounded-2xl border border-dashed border-[var(--surface-light-border)] bg-[var(--surface-light-card)] px-6 py-12 text-center text-sm text-[var(--surface-light-muted)]">
             No jobs match your filters.
           </div>
         )}
@@ -252,20 +259,20 @@ export default function JobsPage() {
             return (
               <article
                 key={job.id}
-                className="rounded-2xl border border-[#e2e8f0] bg-white p-5 transition hover:border-[#cbd5e1] sm:p-6"
+                className="rounded-2xl border border-[var(--surface-light-border)] bg-[var(--surface-light-card)] p-5 transition hover:border-[var(--surface-light-border)] sm:p-6"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <h2 className="font-display text-lg font-semibold tracking-tight text-[#0f172a]">
+                    <h2 className="font-display text-lg font-semibold tracking-tight text-[var(--surface-light-fg)]">
                       {job.title}
                     </h2>
-                    <p className="mt-1 text-sm text-[#64748b]">
+                    <p className="mt-1 text-sm text-[var(--surface-light-muted)]">
                       {job.company_name ? `${job.company_name} · ` : ''}
                       {roleLabel(job.role)}
                       {job.location ? ` · ${job.location}` : ''}
                     </p>
                     {job.salary_range && (
-                      <p className="mt-1 text-sm text-[#475569]">{job.salary_range}</p>
+                      <p className="mt-1 text-sm text-[var(--surface-light-muted)]">{job.salary_range}</p>
                     )}
                     {status && (
                       <p className="mt-2 text-xs font-medium capitalize text-emerald-700">
@@ -279,15 +286,15 @@ export default function JobsPage() {
                     }
                     className={`shrink-0 rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition ${
                       status
-                        ? 'border border-[#e2e8f0] text-[#0f172a] hover:bg-[#f8fafc]'
-                        : 'bg-[#0f172a] text-white hover:bg-[#1e293b]'
+                        ? 'border border-[var(--surface-light-border)] text-[var(--surface-light-fg)] hover:bg-[var(--surface-light)]'
+                        : 'bg-[var(--surface-light-fg)] text-[var(--surface-light-card)] hover:opacity-90'
                     }`}
                   >
                     {status ? 'View application' : 'Apply'}
                   </Link>
                 </div>
                 {job.description && (
-                  <p className="mt-4 border-t border-[#f1f5f9] pt-4 text-sm leading-relaxed text-[#64748b] line-clamp-3">
+                  <p className="mt-4 border-t border-[var(--surface-light-border)] pt-4 text-sm leading-relaxed text-[var(--surface-light-muted)] line-clamp-3">
                     {job.description}
                   </p>
                 )}
