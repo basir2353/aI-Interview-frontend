@@ -34,7 +34,12 @@ export default function InterviewEnterPage() {
       }
       router.replace(`/interview/${res.interviewId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start interview');
+      const message = e instanceof Error ? e.message : 'Failed to start interview';
+      if (/not opened yet|TOO_EARLY|too early/i.test(message)) {
+        router.replace(`/interview/join/${token}`);
+        return;
+      }
+      setError(message);
       setStarting(false);
     }
   }, [token, starting, router]);

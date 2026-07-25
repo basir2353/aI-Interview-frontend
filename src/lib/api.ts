@@ -955,6 +955,12 @@ export interface ContactSubmissionRow {
   updated_at: string;
 }
 
+export interface PrepQuestion {
+  text: string;
+  difficulty?: string;
+  topic?: string;
+}
+
 export interface PublicJoinInfo {
   id: string;
   candidateEmail: string;
@@ -966,6 +972,15 @@ export interface PublicJoinInfo {
   interviewId?: string | null;
   interviewerPersona?: InterviewerPersona;
   recruiterCompanyName?: string | null;
+  companyName?: string | null;
+  positionTitle?: string | null;
+  durationMinutes?: number | null;
+  focusAreas?: string | null;
+  canStart?: boolean;
+  openAt?: string;
+  secondsUntilStart?: number;
+  serverNow?: string;
+  prepQuestions?: PrepQuestion[];
 }
 
 export interface PublicJoinStartResponse {
