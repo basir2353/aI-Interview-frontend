@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -181,6 +182,15 @@ export default function RecruiterSchedulePage() {
         interviewLanguage,
       });
       setCreatedJoinUrl(created.joinUrl);
+      if (created.emailSent) {
+        toast.success(`Interview scheduled — invite email sent to ${created.candidateEmail}`);
+      } else {
+        toast.error(
+          created.emailError
+            ? `Interview scheduled, but email failed: ${created.emailError}`
+            : `Interview scheduled, but invite email was not sent to ${created.candidateEmail}`
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to schedule interview');
     } finally {
@@ -202,6 +212,9 @@ export default function RecruiterSchedulePage() {
         {createdJoinUrl && (
           <Card className="rounded-2xl border-[var(--success-border)] bg-[var(--success-bg)] p-5">
             <p className="text-sm font-medium text-[var(--success-text)]">Interview created successfully.</p>
+            <p className="mt-1 text-xs text-[var(--success-text)]">
+              Invite email is sent automatically to the candidate when mail is configured.
+            </p>
             <p className="mt-2 break-all text-xs text-[var(--success-text)]">{createdJoinUrl}</p>
             <div className="mt-3">
               <Link

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { RecruiterShell } from '@/components/layout/RecruiterShell';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -113,6 +114,15 @@ export default function RecruiterJobsPage() {
         role: application.position_role,
       });
       setJoinUrlByApp((prev) => ({ ...prev, [application.id]: created.joinUrl }));
+      if (created.emailSent) {
+        toast.success(`Invite email sent to ${created.candidateEmail}`);
+      } else {
+        toast.error(
+          created.emailError
+            ? `Scheduled, but email failed: ${created.emailError}`
+            : 'Scheduled, but invite email was not sent'
+        );
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to schedule interview');
