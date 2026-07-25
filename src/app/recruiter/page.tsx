@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { api, type AdminScheduleRow, type RecruiterApplication } from '@/lib/api';
 import type { InterviewRole, InterviewerPersona, InterviewLanguageCode } from '@/types';
 import {
@@ -206,7 +207,7 @@ export default function RecruiterDashboardPage() {
                 starterCode: starterCode.trim() || undefined,
               }))
           : undefined;
-      await api.recruiterCreateSchedule({
+      const created = await api.recruiterCreateSchedule({
         candidateEmail,
         candidateName: candidateName || undefined,
         role,
@@ -218,6 +219,15 @@ export default function RecruiterDashboardPage() {
         interviewerPersona: createInterviewerPersona,
         interviewLanguage: createInterviewLanguage,
       });
+      if (created.emailSent) {
+        toast.success(`Interview scheduled — invite email sent to ${created.candidateEmail}`);
+      } else {
+        toast.error(
+          created.emailError
+            ? `Scheduled, but email failed: ${created.emailError}`
+            : `Scheduled, but invite email was not sent to ${created.candidateEmail}`
+        );
+      }
       setCreateOpen(false);
       setCandidateEmail('');
       setCandidateName('');
